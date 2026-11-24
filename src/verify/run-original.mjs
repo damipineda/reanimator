@@ -9,7 +9,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import { startStaticServer, stopStaticServer } from './static-server.mjs';
-import { loadOriginal, swfClick, dismissOverlays } from './ruffle-helpers.mjs';
+import { loadOriginal, prepareAlignedClick, triggerAlignedClick, dismissOverlays } from './ruffle-helpers.mjs';
 import { readAllGauges, ocrCrop, extractNumber, CROPS, closeWorker } from './ocr.mjs';
 import { REPO_ROOT, SWF_PATH, RUFFLE_JS_PATH } from './config.mjs';
 
@@ -36,15 +36,27 @@ export async function runScenarioAgainstOriginal(scenario, { screenshotDir } = {
   try {
     const page = await browser.newPage({ viewport: scenario.viewport });
     await loadOriginal(page, `http://localhost:${PORT}/src/verify/harness/original.html`);
+    // ALIGNED start (see docs/KIRO_NOTES.md, "Second correction"): all
+    // overlay-dismissal/settle waiting happens BEFORE t0 is captured, not
+    // after - the old swfClick() had ~220ms of that between t0 and the
+    // actual mouse-down, enough to flip a knife-edge scenario's outcome.
+    await prepareAlignedClick(page, START_BUTTON.x, START_BUTTON.y);
     const t0 = Date.now();
-    await swfClick(page, START_BUTTON.x, START_BUTTON.y);
+    await triggerAlignedClick(page);
 
-    const checkpointResults = {};
     const sortedEvents = [...scenario.events].sort((a, b) => a.t - b.t);
     const allTimes = [...new Set([...sortedEvents.map((e) => e.t), ...scenario.checkpoints])].sort(
       (a, b) => a - b
     );
     const firedEvents = new Set();
+    // Only screenshot capture (fast) happens in this real-time-critical
+    // loop - OCR runs in a separate pass below. An earlier version ran
+    // OCR synchronously inside this loop; since OCR takes several real
+    // seconds, that was eating into later checkpoints'/keypresses' own
+    // schedules on any scenario with closely-spaced checkpoints (see
+    // docs/KIRO_NOTES.md for the ~970ms of self-inflicted jitter that
+    // produced before this fix).
+    const shots = [];
 
     for (const t of allTimes) {
       const elapsed = Date.now() - t0;
@@ -66,21 +78,27 @@ export async function runScenarioAgainstOriginal(scenario, { screenshotDir } = {
         await dismissOverlays(page);
         const shotPath = path.join(screenshotDir || REPO_ROOT, `${scenario.id}-t${t}-${Date.now()}.png`);
         await page.screenshot({ path: shotPath, timeout: 10000 });
-        const gauges = await readAllGauges(shotPath);
-        const landingMsgRaw = await ocrCrop(shotPath, CROPS.landingMessage);
-        checkpointResults[t] = {
-          altitude: extractNumber(gauges.altitude),
-          range: extractNumber(gauges.range),
-          vY: extractNumber(gauges.vY),
-          vX: extractNumber(gauges.vX),
-          thrust: extractNumber(gauges.thrust),
-          fuel: extractNumber(gauges.fuel),
-          score: extractNumber(gauges.score),
-          landingSpeed: extractNumber(landingMsgRaw),
-          landingMessageRaw: landingMsgRaw,
-          screenshot: shotPath,
-        };
+        shots.push({ t, realElapsed: Date.now() - t0, shotPath });
       }
+    }
+
+    const checkpointResults = {};
+    for (const shot of shots) {
+      const gauges = await readAllGauges(shot.shotPath);
+      const landingMsgRaw = await ocrCrop(shot.shotPath, CROPS.landingMessage);
+      checkpointResults[shot.t] = {
+        altitude: extractNumber(gauges.altitude),
+        range: extractNumber(gauges.range),
+        vY: extractNumber(gauges.vY),
+        vX: extractNumber(gauges.vX),
+        thrust: extractNumber(gauges.thrust),
+        fuel: extractNumber(gauges.fuel),
+        score: extractNumber(gauges.score),
+        landingSpeed: extractNumber(landingMsgRaw),
+        landingMessageRaw: landingMsgRaw,
+        screenshot: shot.shotPath,
+        realElapsed: shot.realElapsed,
+      };
     }
 
     return { scenarioId: scenario.id, checkpoints: checkpointResults };

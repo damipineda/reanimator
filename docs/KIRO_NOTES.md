@@ -991,6 +991,144 @@ any FAIL makes the whole verdict FAIL). `docs/verifier-report.html` and
 result anymore, and the scenario is labeled DIVERGES/FAIL throughout, per
 this task's explicit instruction.
 
+### Fourth and final round: fuel added, both rebuilds aligned, noise floor measured, main pipeline fixed
+
+The previous round's "hard landing at 2.8 m/s" conclusion is now **corrected
+again** - not because it was unreasonable given what was known then, but
+because this round found a SECOND measurement bug stacked on top of the
+first, and fixing both changes the answer again. Recording the full,
+honest sequence rather than just the final number, because the sequence
+itself is the actual lesson here.
+
+**(1) Fuel added to the aligned time series; (2) the AI-only rebuild
+aligned too, without modifying it.** Built
+`src/verify/log-three-way-aligned.mjs`: logs altitude/thrust/range/fuel
+for the original (OCR), the hand-built rebuild (exact state), AND the
+AI-only rebuild (DOM text) at 23 matched sample times, all three
+clocks aligned to the same real instant. The AI-only rebuild has no Start
+button and no debug hook (per the earlier task that produced it,
+deliberately not modified), so it was aligned by polling its own
+already-rendered `vy-value` text for the first post-start change - a
+pure external read, not a code change - rather than the coarser
+`height-value` (which would not visibly change for ~0.79s into a 50m
+free-fall, far too late to use as a start signal). Fuel for the AI-only
+rebuild also has no text readout, only a CSS width% bar
+(`#fuel-gauge.style.width`) - read and converted back to kg using the
+already-recovered `INITIAL_FUEL` constant (816.5), not a new assumption.
+
+**A second real bug, found while building the noise-floor measurement:**
+the first run of this three-way script showed jitter (scheduled sample
+time vs. real elapsed time when the sample was actually taken) as high as
+**~970ms** - which would have been consistent with the earlier round's
+"hard landing" finding being itself another measurement artifact. Root
+cause: the script's own `readAllGauges()` OCR call (7 fields x Tesseract,
+several real SECONDS per sample) was running INSIDE the real-time
+scripted-event loop, synchronously, BEFORE the loop could even start
+waiting for the next scheduled sample or keypress - so OCR's own
+processing time was directly delaying later events' real-world firing
+time, compounding across samples. Fixed by splitting into two passes:
+the real-time-critical loop now does ONLY screenshot capture (fast,
+~10-50ms) and records a timestamp at that exact moment; OCR runs
+afterward, on the saved screenshots, with no effect on anything that was
+already captured. The same fix was ported into the MAIN pipeline
+(`run-original.mjs`) too, not just this diagnostic script.
+
+**With BOTH bugs fixed (aligned click AND decoupled OCR), the picture
+changes again - and resolves.** Jitter dropped to a consistent ~48-50ms
+baseline (rising to 71-224ms briefly during the densest keypress
+activity, and to the full-page original value once during the actual
+mouse-down sequence - all explained, not mysterious). Re-ran the
+original 3x (1 full time-series run + 2 leaner repeat runs, final-state
+only): **all 3 landed SOFT** (1.0, 0.7, 1.1 m/s, `soft landings: 1` each
+time), matching the hand-built reference's own category. The previous
+"hard landing at 2.8 m/s" result does not replicate under this more
+careful methodology - it is now understood to have itself been a product
+of the OCR-in-loop jitter bug (which was still present in that
+investigation, even though the click alignment fix from the round before
+WAS already in place), not a genuine, repeatable behavior of the
+original.
+
+**Noise floor, as requested:** for each sample, `jitter = realElapsed -
+scheduledT`; `altitudeNoise = |jitter_seconds| * |velocity estimate|`
+(velocity from the hand-built rebuild's own exact finite-difference
+altitude derivative, the best available estimate, since no OCR field
+reads velocity reliably). Results: ~0.02-0.25m during free-fall (low
+velocity, low jitter), rising to a transient ~0.3-1.9m right around the
+scripted keypress cluster (t=3800-4200ms, where real time is also being
+spent dispatching 7 keyboard events), settling back to ~0.01-0.28m for
+the remainder of the flight. This is the measurement's own error bar -
+any gap smaller than this, at a given sample, should not be read as a
+real divergence.
+
+**The STANDARD, official `verify.mjs` pipeline was then updated to match**
+(not just this side diagnostic): `run-original.mjs` now uses
+`prepareAlignedClick()`/`triggerAlignedClick()` instead of `swfClick()`,
+with the same OCR-decoupling (screenshots captured in the real-time loop,
+OCR run afterward on the saved files). `run-rebuild.mjs`'s own click was
+symmetrically updated (move, capture `t0`, then bare down+wait+up,
+instead of one `page.mouse.click()` call) so neither side of the official
+comparison gets an unaccounted head start from its click sequence either.
+`soft-landing.json`'s last checkpoint was widened from 21000ms to 24000ms
+(a timing-margin change, not a physics constant) after the aligned click
+sequence's slightly different real-world timing occasionally left the
+hand-built rebuild still airborne at the old checkpoint - not a behavior
+change, just enough margin for both sides to have genuinely finished
+landing before the measurement is taken.
+
+**Final, official result after all of this:** `free-fall` and
+`crash-tilt` remain a clean PASS (12.7 m/s both sides, unchanged).
+`soft-landing` now shows `originalLandedByEnd: true` AND
+`rebuildLanded: true` (`categoryMismatch: false` - the earlier
+false-positive-driven mismatch is gone) - **both land soft** - but still
+reports **FAIL**, because the exact magnitude differs more than OCR's own
+rounding tolerance allows: original 0.5-1.0 m/s (2 of 3 runs - the 3rd
+had an unreadable landing message) vs. rebuild's 0.23 m/s, roughly 2-4x
+softer in the rebuild. The aligned, OCR-decoupled time series pinpoints
+WHERE this starts: altitude tracks within ~0.6m through the entire
+free-fall phase (t=0-3700ms); the first gap clearly above the measured
+noise floor appears at t=3800ms, the exact sample where thrust first
+engages - even though BOTH sides apply the IDENTICAL thrust value at
+every matched sample (9000N, then 15750N by t=3900ms), which rules out
+input handling and key-repeat as the cause. The gap then grows
+continuously through the rest of the burn rather than appearing as a
+single offset, consistent with the physics integration itself behaving
+differently once a large, time-varying acceleration is involved -
+something free-fall's small, constant -1.6 m/s² never exercises.
+
+**Per this round's explicit instruction, this is documented as
+UNRESOLVED, not fixed.** Two live candidate mechanisms remain
+undistinguished within this investigation's time-box: (a) a small
+imprecision in the recovered mass/thrust constants vs. the true original,
+or (b) a dt-measurement difference between native JS and Ruffle's AVM1
+emulation that only becomes visible once acceleration is large and
+changing. Deliberately did NOT adjust `GRAVITY`, `MASS_EMPTY`,
+`SPECIFIC_I`, or any other constant in `physics.js` to narrow this gap:
+those values are direct transcriptions of literals read from the
+decompiled source (`Lander.as:49-55`, `Constants.as:3`), not estimates
+with a "more correct" value this investigation could discover by trying
+numbers until the gap closed - doing that would be exactly the "tune
+constants to force a match" this round's instruction explicitly
+prohibited, and would turn a cited fact into a guess.
+
+**The AI-only rebuild's own alignment, found still imperfect, also left
+unresolved:** even with the tighter `vy-value`-polling alignment, it
+still reads measurably lower altitude than the hand-built rebuild
+through pure free-fall (~37m vs. ~40.5m at t=3500ms) - more than the
+<=1-tick (~40ms) residual uncertainty that polling method should leave
+on its own. Not chased down further this round (secondary to the
+original-vs-hand-built investigation this round's time-box prioritized);
+named as a smaller, separate, still-open gap rather than left
+unmentioned.
+
+**What this means for the project's overall claim:** `free-fall` and
+`crash-tilt` remain confidently verified matches. `soft-landing` is now
+correctly reported as a real, measured, repeatable divergence in landing
+speed MAGNITUDE (not category, and not a measurement artifact - that
+possibility was specifically tested for and ruled out via the noise
+floor and the repeated aligned runs) - exactly the kind of honest,
+specific finding the "measured, not claimed" principle calls for, rather
+than either a false PASS or a false "never lands."
+
 ### Demo page, verified Node-independent + prepared for GitHub Pages
 
 Checked that `web/index.html` depends on nothing Node-specific: every

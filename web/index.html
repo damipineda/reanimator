@@ -127,13 +127,18 @@
     clicks its Start button; the AI-only rebuild auto-starts during its own page load, before
     the test's clock begins, giving it an unaccounted head start that lands every scripted
     keypress relatively later on its own internal timeline. Not a bug in the Rewriter's
-    output - a bug in how this specific test measures an auto-starting app. Separately, running
-    the REAL original 6x on this same scripted scenario found it does not land at all within
-    45 seconds (confirmed via the "soft/hard landing" score field, not landing speed) - the
-    most stable result measured anywhere in this project, just not the question originally
-    asked. Full numbers and reasoning:
+    output - a bug in how this specific test measures an auto-starting app. Separately, a
+    multi-round investigation into how the REAL original behaves on this same scripted
+    scenario went through three corrected methodology bugs of its own (a ~220ms click-settle
+    delay, then OCR work delaying the scripted keypresses themselves) before landing on a
+    properly aligned measurement: with that fixed, <strong>the original DOES land, softly,
+    across 3 repeated runs</strong> (1.0, 0.7, 1.1 m/s) - matching the hand-built reference's
+    own category, though the exact magnitude still differs (original ~0.5-1.0 m/s vs. the
+    hand-built rebuild's ~0.2-1.1 m/s depending on the run) by more than measurement noise
+    alone explains - documented as a real, unresolved gap rather than tuned away. Full numbers
+    and the full account of each methodology correction:
     <a href="../docs/verifier-report.html#ai-only" target="_blank">verifier report, "Hand-built
-    reference vs. AI-only rebuild"</a> and <code>docs/KIRO_NOTES.md</code>.
+    reference vs. AI-only rebuild"</a>, <a href="../docs/verifier-report.html#noise-floor" target="_blank">"Measurement noise floor"</a>, and <code>docs/KIRO_NOTES.md</code>.
   </p>
 
   <h2>Verifier report</h2>

@@ -51,9 +51,18 @@ export async function runScenarioAgainstBuild(
     // keeps working if the surrounding CSS layout ever changes - see
     // scene.js drawIntroPlaque(): button center is (0.35*800, 0.5*600 +
     // 320/2 - 28) = (280, 432) in CANVAS-LOCAL coordinates.
+    //
+    // ALIGNED start (see docs/KIRO_NOTES.md): move into position FIRST,
+    // capture t0, THEN mouse down+up with no settle delay in between -
+    // symmetric with run-original.mjs's prepareAlignedClick/
+    // triggerAlignedClick split, so neither side of a comparison gets an
+    // unaccounted head start from its own click sequence.
     const canvasBox = await page.locator('#stage').boundingBox();
+    await page.mouse.move(canvasBox.x + 280, canvasBox.y + 432);
     const t0 = Date.now();
-    await page.mouse.click(canvasBox.x + 280, canvasBox.y + 432);
+    await page.mouse.down();
+    await page.waitForTimeout(40);
+    await page.mouse.up();
 
     const checkpointResults = {};
     const sortedEvents = [...scenario.events].sort((a, b) => a.t - b.t);

@@ -78,35 +78,34 @@ function scenarioSection(scenario, result) {
 function ocrNote(id, d) {
   if (id === 'soft-landing') {
     return (
-      "VERDICT: DIVERGES. The landing-message crop was calibrated against the ORIGINAL's crash " +
-      "message layout; a soft/hard landing message renders differently, so landing speed could " +
-      "not be read directly. Switched the primary metric to 'score' (already a working, " +
-      "calibrated OCR field): this scenario's landing x (45m) sits inside real landing-spot 9, " +
-      "so a genuine landing there reads score=20 (soft) or score=10 (hard). The STANDARD " +
-      "pipeline run above (3 runs, via run-original.mjs's normal click path) measured score=0 " +
-      "every time, with the lander still airborne and accelerating upward - i.e. it never lands " +
-      "under this pipeline's own click timing. A SEPARATE, more careful follow-up investigation " +
-      "(see docs/KIRO_NOTES.md, 'Second correction') found this 'never lands' behavior is itself " +
-      "a methodology artifact: the standard click helper has ~220ms of settle delay BEFORE the " +
-      "actual start, which on this knife-edge 'suicide burn' scenario is enough to tip the " +
-      "outcome every time. With a properly ALIGNED start (settle delay moved before capturing " +
-      "t0, not after), <strong>the original DOES land - a hard landing at 2.8 m/s</strong> " +
-      "(confirmed via a readable landing-message screenshot: 'keyNotFound2.8 m/s', hard " +
-      "landings: 1). Either way the scenario DIVERGES: the hand-built reference lands SOFT " +
-      "(~1.0-1.1 m/s) on the identical script. The aligned comparison also pinpoints WHERE: " +
-      "altitude tracks within ~0.6m through the entire free-fall phase (t=0-3700ms), and the " +
-      "first gap clearly above that noise (1.64m) appears at t=3800ms - exactly when thrust " +
-      "first engages, even though BOTH sides read the identical thrust value (9000N, then " +
-      "15750N by t=3900ms) at every matched sample, ruling out input handling/key-repeat as the " +
-      "cause. The gap then grows continuously through the rest of the burn, pointing at the " +
-      "physics integration itself behaving differently once a large, time-varying acceleration " +
-      "is involved (vs. free-fall's small constant case) - not fully distinguished (mass/thrust " +
-      "constant precision vs. a dt-measurement difference under Ruffle's AVM1 emulation are both " +
-      "live candidates) within this investigation's own time-box, and the rebuild was NOT " +
-      "modified to chase this down further. Note: the standard pipeline result above still uses " +
-      "the unaligned click path (not yet updated to match) and will keep reporting 'never lands' " +
-      "until it is - the DIVERGES verdict is correct either way, only the detailed mechanism " +
-      "shown here is the more precise one."
+      "VERDICT: DIVERGES (on exact landing speed, not on category). This scenario's methodology " +
+      "went through three corrections, each one found and fixed rather than papered over - full " +
+      "account in docs/KIRO_NOTES.md: (1) the original first appeared to 'never land' - this was " +
+      "a ~220ms settle delay in the click helper landing BEFORE t0 instead of after, enough to " +
+      "tip this knife-edge 'suicide burn' scenario every time; (2) fixed, it then appeared to " +
+      "land HARD at 2.8 m/s, diverging from the rebuild's SOFT ~1.0 m/s - but that run still had " +
+      "OCR running synchronously inside the real-time scripted-event loop, which was quietly " +
+      "delaying later keypresses by up to ~970ms; (3) with OCR fully decoupled from timing AND " +
+      "the click properly aligned, 3 repeated runs ALL landed SOFT (1.0, 0.7, 1.1 m/s) - matching " +
+      "the rebuild's own category. The STANDARD PIPELINE above now uses this same aligned click " +
+      "path (updated this pass) and a widened final checkpoint (21s -> 24s, timing margin only, " +
+      "not a physics constant) so neither side's own landing-time variance causes a spurious " +
+      "'still airborne' read: both now land SOFT, and the category MATCHES. " +
+      "<strong>The exact magnitude still differs</strong>: original 0.5-1.0 m/s (2 of 3 runs - " +
+      "one had an unreadable landing message) vs. rebuild's 0.23 m/s - roughly 2-4x softer in " +
+      "the rebuild, outside the OCR display-rounding tolerance, hence the FAIL above despite the " +
+      "matching category. An aligned, OCR-decoupled altitude/thrust/fuel time series (see " +
+      "docs/KIRO_NOTES.md) found this gap starts specifically when thrust engages (free-fall " +
+      "matches within ~0.6m beforehand) even though BOTH sides apply the identical thrust value " +
+      "at every matched sample - ruling out input handling/key-repeat. Two candidate mechanisms " +
+      "remain (a small mass/thrust-constant imprecision vs. a dt-measurement difference under " +
+      "Ruffle's AVM1 emulation, which free-fall's small constant acceleration never exercises) " +
+      "but could not be told apart within this investigation's time-box. Per this round's " +
+      "explicit instruction, this is <strong>documented as unresolved, not forced</strong> - the " +
+      "recovered constants in physics.js are direct transcriptions of the decompiled source, not " +
+      "approximations with a 'more correct' value waiting to be found, so narrowing this gap " +
+      "further without a confirmed mechanism would mean guessing a number to match the original " +
+      "rather than citing one - exactly what this project does not do."
     );
   }
   return (
@@ -196,6 +195,16 @@ function rebuildComparisonSection(comparisons) {
       the TEST's own synchronization gap was found and explained, which is a separate thing from
       fixing the artifact.
       ${anyErrors ? '<br/><strong>Console errors were observed</strong> - see work/verify-results/rebuild-comparison.json.' : ''}
+      <br/><br/><strong>Update:</strong> a later three-way comparison (original + hand-built +
+      AI-only, all aligned - see <code>src/verify/log-three-way-aligned.mjs</code>) tried a
+      tighter alignment for the AI-only rebuild (polling its own already-rendered
+      <code>vy-value</code> text for the first post-start change, instead of page-load-settle),
+      which reduced but did NOT fully close its head start: it still reads measurably lower
+      altitude than the hand-built rebuild through pure free-fall (e.g. ~37m vs. ~40.5m at
+      t=3500ms), more than the <=1-tick (~40ms) residual uncertainty that polling method should
+      leave. Not chased down further this pass (secondary to the original-vs-hand-built
+      investigation this round prioritized) - a known, smaller, still-open gap, not silently
+      left unmentioned.
     </p>`;
 }
 
@@ -291,6 +300,34 @@ export function generateReport() {
     re-runs the free-fall scenario against it.
   </p>
   ${mutationSection(mutation)}
+
+  <h2 id="noise-floor">Measurement noise floor</h2>
+  <p>
+    Before trusting any small gap between the original and a rebuild as a real divergence, how
+    much of a gap could pure measurement timing alone explain? Logged the real elapsed time
+    when each OCR screenshot was actually captured vs. its SCHEDULED time (the jitter), and
+    multiplied by the hand-built rebuild's own exact velocity at that moment (the best available
+    velocity estimate, since OCR cannot read velocity reliably) to get an implied altitude
+    uncertainty, for the <code>soft-landing</code> scenario, aligned start, OCR decoupled from
+    the real-time loop (see <code>src/verify/log-three-way-aligned.mjs</code>):
+  </p>
+  <table>
+    <tr><th>Phase</th><th>Typical jitter</th><th>Implied altitude noise</th></tr>
+    <tr><td>Free-fall (t=0-3700ms, low velocity)</td><td>~48-49ms</td><td>~0.02-0.25m</td></tr>
+    <tr><td>During the scripted thrust burst (t=3800-4200ms, velocity peaks ~8 m/s)</td><td>71-224ms</td><td>up to ~1.9m (transient)</td></tr>
+    <tr><td>After the burst settles (t&gt;4500ms)</td><td>~48-53ms</td><td>~0.01-0.28m</td></tr>
+  </table>
+  <p class="note">
+    An earlier version of this measurement showed jitter as high as ~970ms throughout, which
+    would have swamped any real signal - that turned out to be a bug in the measurement itself
+    (OCR was running synchronously inside the real-time scripted-event loop, so its own several-
+    seconds-per-sample cost was bleeding into later samples' schedules - fixed by decoupling
+    screenshot capture, which must stay real-time-accurate, from OCR, which does not need to).
+    With that fixed, the noise floor is small (well under 0.3m) everywhere except briefly during
+    the densest keypress activity, where it is still under 2m - smaller than the ~3-5m gaps this
+    investigation measured between the original and a rebuild during the sustained thrust phase,
+    so those gaps are reported as a real signal, not noise, in the section below.
+  </p>
 
   <h2 id="ai-only">Hand-built reference vs. AI-only rebuild</h2>
   <p>
