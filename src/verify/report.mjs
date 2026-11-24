@@ -29,6 +29,27 @@ function statusBadge(status) {
   return `<span style="background:${color};color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">${esc(status)}</span>`;
 }
 
+function twoLevelBadge(label) {
+  const color = label === 'MATCH' ? '#1a7f37' : label === 'DIVERGES' ? '#b31d1d' : '#555';
+  return `<span style="background:${color};color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">${esc(label)}</span>`;
+}
+
+function classifyOriginalCategory(d) {
+  if (!d.originalLandedByEnd) return 'airborne';
+  const maxLS = d.original?.landingSpeed?.max;
+  if (maxLS === null || maxLS === undefined) return 'landed (speed unreadable)';
+  if (maxLS >= 10) return 'crash';
+  if (maxLS <= 2) return 'soft';
+  return 'hard';
+}
+
+function classifyRebuildCategory(crashState) {
+  if (crashState === 'softLanded') return 'soft';
+  if (crashState === 'hardLanded') return 'hard';
+  if (crashState === 'crashLanded') return 'crash';
+  return crashState || 'unknown';
+}
+
 function keyTimeline(scenario) {
   if (scenario.events.length === 0) return '<em>no input (pure gravity/physics only)</em>';
   return (
@@ -42,11 +63,26 @@ function scenarioSection(scenario, result) {
   const d = result.detail || {};
   const origLS = d.original?.landingSpeed || {};
   const origRange = d.original?.range || {};
+  const origCat = classifyOriginalCategory(d);
+  const rebCat = classifyRebuildCategory(d.rebuild?.crashState);
+  const categoryLevel = d.categoryMismatch ? 'DIVERGES' : (origCat === rebCat ? 'MATCH' : 'DIVERGES');
+  const magnitudeLevel = d.landingSpeedOk === null
+    ? 'N/A'
+    : (d.landingSpeedOk && d.rangeOk !== false ? 'MATCH' : 'DIVERGES');
+  const exactRebuildLS = d.rebuild?.raw?.landingSpeed;
+  const rebuildLSDisplay = exactRebuildLS !== undefined && exactRebuildLS !== null
+    ? `${fmt(d.rebuild?.landingSpeed)} (${Number(exactRebuildLS).toFixed(2)} exact)`
+    : fmt(d.rebuild?.landingSpeed);
   return `
   <section class="scenario">
     <h3>${esc(scenario.id)} ${statusBadge(result.status)}</h3>
     <p>${esc(scenario._description || '')}</p>
     <p><strong>Expected outcome:</strong> ${esc(scenario._expectedOutcome || '')}</p>
+    <p>
+      <strong>Two-level assessment (strict verdict above unchanged):</strong>
+      Outcome category (soft/hard/crash): ${twoLevelBadge(categoryLevel)} (original: <code>${esc(origCat)}</code>, rebuild: <code>${esc(rebCat)}</code>) &nbsp;|&nbsp;
+      Magnitude (within original spread &amp; OCR tolerance): ${twoLevelBadge(magnitudeLevel)}
+    </p>
     <h4>Scripted key timeline</h4>
     ${keyTimeline(scenario)}
     <h4>Measured: original (${d.original?.runs ?? 0} real runs via Ruffle + OCR) vs. rebuild (exact state)</h4>
@@ -55,7 +91,7 @@ function scenarioSection(scenario, result) {
       <tr>
         <td>Landing speed (m/s)</td>
         <td>${fmt(origLS.min)}</td><td>${fmt(origLS.max)}</td><td>${fmt(origLS.mean)}</td>
-        <td>${fmt(d.rebuild?.landingSpeed)}</td>
+        <td>${esc(rebuildLSDisplay)}</td>
         <td>${d.landingSpeedOk === null ? 'N/A (OCR unreadable)' : d.landingSpeedOk ? '✓' : '✗'}</td>
       </tr>
       <tr>
@@ -65,13 +101,16 @@ function scenarioSection(scenario, result) {
         <td>${d.rangeOk === null ? 'N/A' : d.rangeOk ? '✓' : '✗'}</td>
       </tr>
       <tr>
-        <td>Episode ended by last checkpoint?</td>
-        <td colspan="3">original: ${d.originalLandedByEnd ? 'yes' : 'no'}</td>
-        <td colspan="2">rebuild: ${d.rebuildLanded ? 'yes' : 'no'} ${d.categoryMismatch ? '&mdash; <strong style="color:#b31d1d">MISMATCH</strong>' : ''}</td>
+        <td>Outcome category</td>
+        <td colspan="3">original: <code>${esc(origCat)}</code> (ended by last checkpoint: ${d.originalLandedByEnd ? 'yes' : 'no'})</td>
+        <td colspan="2">rebuild: <code>${esc(rebCat)}</code> (<code>${esc(d.rebuild?.crashState ?? '—')}</code>) &mdash; ${twoLevelBadge(categoryLevel)}</td>
       </tr>
-      <tr><td>Rebuild crashState</td><td colspan="5">${esc(d.rebuild?.crashState ?? '—')}</td></tr>
+      <tr>
+        <td>Magnitude match</td>
+        <td colspan="5">${twoLevelBadge(magnitudeLevel)} ${scenario.id === 'soft-landing' ? '(original 0.5-1.1 m/s across aligned runs [0.5-1.0 m/s in verify.mjs], rebuild 0.23 m/s)' : ''}</td>
+      </tr>
     </table>
-    <p class="note"><strong>OCR limits on this scenario:</strong> ${esc(ocrNote(scenario.id, d))}</p>
+    <p class="note"><strong>OCR limits on this scenario:</strong> ${ocrNote(scenario.id, d)}</p>
   </section>`;
 }
 
@@ -147,8 +186,48 @@ function mutationSection(mutation) {
   </section>`;
 }
 
+function threeWayAlignedSection() {
+  return `
+    <h3>Final three-way comparison (aligned start)</h3>
+    <p>
+      Side-by-side summary of all three implementations under the aligned-start protocol.
+      Values that were <strong>not measured</strong> under the aligned start are explicitly marked as such
+      (their earlier unaligned measurements are shown in parentheses for reference only).
+    </p>
+    <table>
+      <tr>
+        <th>Scenario</th>
+        <th>Original (aligned start, Ruffle + OCR)</th>
+        <th>Hand-built reference (aligned start)</th>
+        <th>AI-only rebuild (aligned start)</th>
+        <th>Two-level verdict (original vs. hand-built)</th>
+      </tr>
+      <tr>
+        <td><code>free-fall</code></td>
+        <td>12.7 m/s, <code>crash</code> (3/3 runs; range 45 m)</td>
+        <td>12.7 m/s, <code>crashLanded</code> (range 45 m)</td>
+        <td><em>Not measured with aligned start</em><br/><span style="color:#555;font-size:0.88em;">(unaligned 3-run baseline: 12.7 m/s, <code>crashLanded (destroyed)</code>)</span></td>
+        <td>Category: ${twoLevelBadge('MATCH')}<br/>Magnitude: ${twoLevelBadge('MATCH')}<br/>Strict: ${statusBadge('PASS')}</td>
+      </tr>
+      <tr>
+        <td><code>crash-tilt</code></td>
+        <td>12.7 m/s, <code>crash</code> (3/3 runs; range 45 m)</td>
+        <td>12.7 m/s, <code>crashLanded</code> (range 45 m)</td>
+        <td><em>Not measured with aligned start</em><br/><span style="color:#555;font-size:0.88em;">(unaligned 3-run baseline: 12.7 m/s, <code>crashLanded (destroyed)</code>)</span></td>
+        <td>Category: ${twoLevelBadge('MATCH')}<br/>Magnitude: ${twoLevelBadge('MATCH')}<br/>Strict: ${statusBadge('PASS')}</td>
+      </tr>
+      <tr>
+        <td><code>soft-landing</code></td>
+        <td>0.5-1.1 m/s, <code>soft</code><br/><span style="color:#555;font-size:0.88em;">(<code>verify.mjs</code>: 0.5, 1.0 m/s + 1 unreadable; <code>three-way-aligned</code>: 1.0, 0.7, 1.1 m/s)</span></td>
+        <td>0.23 m/s (0.229 exact / 0.2 rounded), <code>softLanded</code></td>
+        <td><em>Final landing speed &amp; category not measured in aligned run</em><br/><span style="color:#555;font-size:0.88em;">(aligned time-series logged alt/thrust/range/fuel only, reaching 0 m by t=12000ms with 782.8 kg fuel; unaligned 3-run baseline: 4.5-4.6 m/s, <code>hardLanded</code>)</span></td>
+        <td>Category: ${twoLevelBadge('MATCH')}<br/>Magnitude: ${twoLevelBadge('DIVERGES')}<br/>Strict: ${statusBadge('FAIL')}</td>
+      </tr>
+    </table>`;
+}
+
 function rebuildComparisonSection(comparisons) {
-  if (!comparisons || comparisons.length === 0) return '<p><em>Comparison was not run.</em></p>';
+  if (!comparisons || comparisons.length === 0) return threeWayAlignedSection() + '<p><em>Comparison was not run.</em></p>';
   const rows = comparisons
     .map((c) => {
       const match = c.categoryMatches;
@@ -163,6 +242,8 @@ function rebuildComparisonSection(comparisons) {
     .join('');
   const anyErrors = comparisons.some((c) => c.aiOnly.consoleErrors.length > 0);
   return `
+    ${threeWayAlignedSection()}
+    <h3>Earlier unaligned two-rebuild comparison (hand-built vs. AI-only)</h3>
     <table>
       <tr><th>Scenario</th><th>Hand-built reference</th><th>AI-only rebuild (unmodified)</th><th>Outcome category</th></tr>
       ${rows}

@@ -40,6 +40,11 @@
     <h3>crash-tilt <span style="background:#1a7f37;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">PASS</span></h3>
     <p>Same free-fall as free-fall.json (no thrust input), but 5 early Right-arrow presses (each +3deg via angleRight(), all while still &#39;inFlight&#39; since they happen in the first 300ms) tilt the lander to +15deg = 0.2618 rad, above the 0.2 rad landing-angle threshold. This tests the ANGLE-based disqualification path of the landing-classification rule, distinct from free-fall.json&#39;s speed-based disqualification (both end &#39;crashLanded&#39;, but for different reasons - this scenario&#39;s landing speed alone, at angle=0, would still exceed damageLandingSpeed, so this is a deliberately unambiguous positive-angle case, not a test of the asymmetric angle&lt;0.2 quirk noted in docs/KIRO_NOTES.md (which specifically concerns NEGATIVE angles bypassing the check) - that quirk is documented but not covered by a dedicated scenario here, for time reasons.</p>
     <p><strong>Expected outcome:</strong> crashLanded, destroyed (angle ~0.26 rad &gt; 0.2 disqualifies softLanded/hardLanded regardless of speed; speed is still ~12.6+ m/s from the unmodified free-fall descent, so this would have been crashLanded on speed alone too - this scenario is about confirming the angle path is also wired correctly, not about producing a different outcome label).</p>
+    <p>
+      <strong>Two-level assessment (strict verdict above unchanged):</strong>
+      Outcome category (soft/hard/crash): <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span> (original: <code>crash</code>, rebuild: <code>crash</code>) &nbsp;|&nbsp;
+      Magnitude (within original spread &amp; OCR tolerance): <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span>
+    </p>
     <h4>Scripted key timeline</h4>
     <table class="mini"><tr><th>t (ms)</th><th>key</th></tr><tr><td>100</td><td>ArrowRight</td></tr><tr><td>150</td><td>ArrowRight</td></tr><tr><td>200</td><td>ArrowRight</td></tr><tr><td>250</td><td>ArrowRight</td></tr><tr><td>300</td><td>ArrowRight</td></tr></table>
     <h4>Measured: original (3 real runs via Ruffle + OCR) vs. rebuild (exact state)</h4>
@@ -48,7 +53,7 @@
       <tr>
         <td>Landing speed (m/s)</td>
         <td>12.7</td><td>12.7</td><td>12.7</td>
-        <td>12.7</td>
+        <td>12.7 (12.68 exact)</td>
         <td>✓</td>
       </tr>
       <tr>
@@ -58,19 +63,27 @@
         <td>✓</td>
       </tr>
       <tr>
-        <td>Episode ended by last checkpoint?</td>
-        <td colspan="3">original: yes</td>
-        <td colspan="2">rebuild: yes </td>
+        <td>Outcome category</td>
+        <td colspan="3">original: <code>crash</code> (ended by last checkpoint: yes)</td>
+        <td colspan="2">rebuild: <code>crash</code> (<code>crashLanded</code>) &mdash; <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span></td>
       </tr>
-      <tr><td>Rebuild crashState</td><td colspan="5">crashLanded</td></tr>
+      <tr>
+        <td>Magnitude match</td>
+        <td colspan="5"><span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span> </td>
+      </tr>
     </table>
-    <p class="note"><strong>OCR limits on this scenario:</strong> altitude/vY/fuel fields were occasionally unreadable (null) in individual OCR reads - the original&#39;s own display only ever shows 1 decimal place, and Tesseract on a small vector font is not 100% reliable (see src/verify/ocr.mjs&#39;s header) - but landing speed and range, the two fields this report&#39;s comparison relies on, read cleanly and consistently across all runs.</p>
+    <p class="note"><strong>OCR limits on this scenario:</strong> altitude/vY/fuel fields were occasionally unreadable (null) in individual OCR reads - the original's own display only ever shows 1 decimal place, and Tesseract on a small vector font is not 100% reliable (see src/verify/ocr.mjs's header) - but landing speed and range, the two fields this report's comparison relies on, read cleanly and consistently across all runs.</p>
   </section>
 
   <section class="scenario">
     <h3>free-fall <span style="background:#1a7f37;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">PASS</span></h3>
     <p>No input besides Start. Pure gravity (Constants.g=1.6) from the initial position (45,50)m. Lands ~7.9s in; checkpoints at 2s/5s (in-flight trajectory) and 9s (after touchdown). This is the same free-fall scenario used in Phase 0&#39;s own comparison (see docs/KIRO_NOTES.md and work/lunar-lander/compare/run-comparison.mjs) - re-run here through the formalized src/verify/ harness instead of the ad hoc Phase 0 scripts.</p>
     <p><strong>Expected outcome:</strong> crashLanded (landing speed ~12.6-12.7 m/s, well above damageLandingSpeed=12 and hardLandingSpeed=6; angle=0 throughout, so classification is driven entirely by speed, not the angle quirk - contrast with crash-tilt.json).</p>
+    <p>
+      <strong>Two-level assessment (strict verdict above unchanged):</strong>
+      Outcome category (soft/hard/crash): <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span> (original: <code>crash</code>, rebuild: <code>crash</code>) &nbsp;|&nbsp;
+      Magnitude (within original spread &amp; OCR tolerance): <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span>
+    </p>
     <h4>Scripted key timeline</h4>
     <em>no input (pure gravity/physics only)</em>
     <h4>Measured: original (3 real runs via Ruffle + OCR) vs. rebuild (exact state)</h4>
@@ -79,7 +92,7 @@
       <tr>
         <td>Landing speed (m/s)</td>
         <td>12.7</td><td>12.7</td><td>12.7</td>
-        <td>12.7</td>
+        <td>12.7 (12.68 exact)</td>
         <td>✓</td>
       </tr>
       <tr>
@@ -89,19 +102,27 @@
         <td>✓</td>
       </tr>
       <tr>
-        <td>Episode ended by last checkpoint?</td>
-        <td colspan="3">original: yes</td>
-        <td colspan="2">rebuild: yes </td>
+        <td>Outcome category</td>
+        <td colspan="3">original: <code>crash</code> (ended by last checkpoint: yes)</td>
+        <td colspan="2">rebuild: <code>crash</code> (<code>crashLanded</code>) &mdash; <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span></td>
       </tr>
-      <tr><td>Rebuild crashState</td><td colspan="5">crashLanded</td></tr>
+      <tr>
+        <td>Magnitude match</td>
+        <td colspan="5"><span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span> </td>
+      </tr>
     </table>
-    <p class="note"><strong>OCR limits on this scenario:</strong> altitude/vY/fuel fields were occasionally unreadable (null) in individual OCR reads - the original&#39;s own display only ever shows 1 decimal place, and Tesseract on a small vector font is not 100% reliable (see src/verify/ocr.mjs&#39;s header) - but landing speed and range, the two fields this report&#39;s comparison relies on, read cleanly and consistently across all runs.</p>
+    <p class="note"><strong>OCR limits on this scenario:</strong> altitude/vY/fuel fields were occasionally unreadable (null) in individual OCR reads - the original's own display only ever shows 1 decimal place, and Tesseract on a small vector font is not 100% reliable (see src/verify/ocr.mjs's header) - but landing speed and range, the two fields this report's comparison relies on, read cleanly and consistently across all runs.</p>
   </section>
 
   <section class="scenario">
     <h3>soft-landing <span style="background:#b31d1d;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">FAIL</span></h3>
     <p>A &#39;suicide burn&#39;: free-fall (no thrust) for the first 3.74s, then 7 discrete Up-arrow presses fired 20ms apart (each one +2250 thrust via increaseThrust(), reaching 15750 total) to decelerate sharply before touchdown. Timeline found by src/verify/design-soft-landing.mjs (idealized fixed-40ms-tick simulation of the reference physics.js, predicting ~0.58 m/s). An earlier 9-press/5.0s candidate (idealized prediction ~0.97 m/s) measured 2.05-2.06 m/s against the REAL rebuild in a browser - over the 2 m/s threshold - because real Playwright/CDP dispatch latency between 9 rapid keydown calls delays full thrust more than the idealized simulation accounts for (a systematic effect, not the random per-tick jitter an earlier +/-40%-jitter check had tested for). This 7-press/3.74s config was chosen by testing several candidates directly against the real rebuild and was then repeated 3x for consistency: measured 1.01, 0.96, 1.08 m/s across those 3 real runs, all comfortably softLanded - see docs/KIRO_NOTES.md for the full account of finding and fixing the first (too-marginal) candidate.</p>
     <p><strong>Expected outcome:</strong> softLanded with a comfortable real-world margin (~1.0 m/s vs. the 2 m/s threshold, measured over 3 real runs). Angle stays 0 throughout since no Left/Right key is ever sent.</p>
+    <p>
+      <strong>Two-level assessment (strict verdict above unchanged):</strong>
+      Outcome category (soft/hard/crash): <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span> (original: <code>soft</code>, rebuild: <code>soft</code>) &nbsp;|&nbsp;
+      Magnitude (within original spread &amp; OCR tolerance): <span style="background:#b31d1d;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">DIVERGES</span>
+    </p>
     <h4>Scripted key timeline</h4>
     <table class="mini"><tr><th>t (ms)</th><th>key</th></tr><tr><td>3740</td><td>ArrowUp</td></tr><tr><td>3760</td><td>ArrowUp</td></tr><tr><td>3780</td><td>ArrowUp</td></tr><tr><td>3800</td><td>ArrowUp</td></tr><tr><td>3820</td><td>ArrowUp</td></tr><tr><td>3840</td><td>ArrowUp</td></tr><tr><td>3860</td><td>ArrowUp</td></tr></table>
     <h4>Measured: original (3 real runs via Ruffle + OCR) vs. rebuild (exact state)</h4>
@@ -110,7 +131,7 @@
       <tr>
         <td>Landing speed (m/s)</td>
         <td>0.5</td><td>1</td><td>0.75</td>
-        <td>0.2</td>
+        <td>0.2 (0.23 exact)</td>
         <td>✗</td>
       </tr>
       <tr>
@@ -120,13 +141,16 @@
         <td>✓</td>
       </tr>
       <tr>
-        <td>Episode ended by last checkpoint?</td>
-        <td colspan="3">original: yes</td>
-        <td colspan="2">rebuild: yes </td>
+        <td>Outcome category</td>
+        <td colspan="3">original: <code>soft</code> (ended by last checkpoint: yes)</td>
+        <td colspan="2">rebuild: <code>soft</code> (<code>softLanded</code>) &mdash; <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span></td>
       </tr>
-      <tr><td>Rebuild crashState</td><td colspan="5">softLanded</td></tr>
+      <tr>
+        <td>Magnitude match</td>
+        <td colspan="5"><span style="background:#b31d1d;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">DIVERGES</span> (original 0.5-1.1 m/s across aligned runs [0.5-1.0 m/s in verify.mjs], rebuild 0.23 m/s)</td>
+      </tr>
     </table>
-    <p class="note"><strong>OCR limits on this scenario:</strong> VERDICT: DIVERGES (on exact landing speed, not on category). This scenario&#39;s methodology went through three corrections, each one found and fixed rather than papered over - full account in docs/KIRO_NOTES.md: (1) the original first appeared to &#39;never land&#39; - this was a ~220ms settle delay in the click helper landing BEFORE t0 instead of after, enough to tip this knife-edge &#39;suicide burn&#39; scenario every time; (2) fixed, it then appeared to land HARD at 2.8 m/s, diverging from the rebuild&#39;s SOFT ~1.0 m/s - but that run still had OCR running synchronously inside the real-time scripted-event loop, which was quietly delaying later keypresses by up to ~970ms; (3) with OCR fully decoupled from timing AND the click properly aligned, 3 repeated runs ALL landed SOFT (1.0, 0.7, 1.1 m/s) - matching the rebuild&#39;s own category. The STANDARD PIPELINE above now uses this same aligned click path (updated this pass) and a widened final checkpoint (21s -&gt; 24s, timing margin only, not a physics constant) so neither side&#39;s own landing-time variance causes a spurious &#39;still airborne&#39; read: both now land SOFT, and the category MATCHES. &lt;strong&gt;The exact magnitude still differs&lt;/strong&gt;: original 0.5-1.0 m/s (2 of 3 runs - one had an unreadable landing message) vs. rebuild&#39;s 0.23 m/s - roughly 2-4x softer in the rebuild, outside the OCR display-rounding tolerance, hence the FAIL above despite the matching category. An aligned, OCR-decoupled altitude/thrust/fuel time series (see docs/KIRO_NOTES.md) found this gap starts specifically when thrust engages (free-fall matches within ~0.6m beforehand) even though BOTH sides apply the identical thrust value at every matched sample - ruling out input handling/key-repeat. Two candidate mechanisms remain (a small mass/thrust-constant imprecision vs. a dt-measurement difference under Ruffle&#39;s AVM1 emulation, which free-fall&#39;s small constant acceleration never exercises) but could not be told apart within this investigation&#39;s time-box. Per this round&#39;s explicit instruction, this is &lt;strong&gt;documented as unresolved, not forced&lt;/strong&gt; - the recovered constants in physics.js are direct transcriptions of the decompiled source, not approximations with a &#39;more correct&#39; value waiting to be found, so narrowing this gap further without a confirmed mechanism would mean guessing a number to match the original rather than citing one - exactly what this project does not do.</p>
+    <p class="note"><strong>OCR limits on this scenario:</strong> VERDICT: DIVERGES (on exact landing speed, not on category). This scenario's methodology went through three corrections, each one found and fixed rather than papered over - full account in docs/KIRO_NOTES.md: (1) the original first appeared to 'never land' - this was a ~220ms settle delay in the click helper landing BEFORE t0 instead of after, enough to tip this knife-edge 'suicide burn' scenario every time; (2) fixed, it then appeared to land HARD at 2.8 m/s, diverging from the rebuild's SOFT ~1.0 m/s - but that run still had OCR running synchronously inside the real-time scripted-event loop, which was quietly delaying later keypresses by up to ~970ms; (3) with OCR fully decoupled from timing AND the click properly aligned, 3 repeated runs ALL landed SOFT (1.0, 0.7, 1.1 m/s) - matching the rebuild's own category. The STANDARD PIPELINE above now uses this same aligned click path (updated this pass) and a widened final checkpoint (21s -> 24s, timing margin only, not a physics constant) so neither side's own landing-time variance causes a spurious 'still airborne' read: both now land SOFT, and the category MATCHES. <strong>The exact magnitude still differs</strong>: original 0.5-1.0 m/s (2 of 3 runs - one had an unreadable landing message) vs. rebuild's 0.23 m/s - roughly 2-4x softer in the rebuild, outside the OCR display-rounding tolerance, hence the FAIL above despite the matching category. An aligned, OCR-decoupled altitude/thrust/fuel time series (see docs/KIRO_NOTES.md) found this gap starts specifically when thrust engages (free-fall matches within ~0.6m beforehand) even though BOTH sides apply the identical thrust value at every matched sample - ruling out input handling/key-repeat. Two candidate mechanisms remain (a small mass/thrust-constant imprecision vs. a dt-measurement difference under Ruffle's AVM1 emulation, which free-fall's small constant acceleration never exercises) but could not be told apart within this investigation's time-box. Per this round's explicit instruction, this is <strong>documented as unresolved, not forced</strong> - the recovered constants in physics.js are direct transcriptions of the decompiled source, not approximations with a 'more correct' value waiting to be found, so narrowing this gap further without a confirmed mechanism would mean guessing a number to match the original rather than citing one - exactly what this project does not do.</p>
   </section>
 
   <h2>Mutation test</h2>
@@ -199,6 +223,44 @@
     outcome to the hand-built reference's.
   </p>
   
+    
+    <h3>Final three-way comparison (aligned start)</h3>
+    <p>
+      Side-by-side summary of all three implementations under the aligned-start protocol.
+      Values that were <strong>not measured</strong> under the aligned start are explicitly marked as such
+      (their earlier unaligned measurements are shown in parentheses for reference only).
+    </p>
+    <table>
+      <tr>
+        <th>Scenario</th>
+        <th>Original (aligned start, Ruffle + OCR)</th>
+        <th>Hand-built reference (aligned start)</th>
+        <th>AI-only rebuild (aligned start)</th>
+        <th>Two-level verdict (original vs. hand-built)</th>
+      </tr>
+      <tr>
+        <td><code>free-fall</code></td>
+        <td>12.7 m/s, <code>crash</code> (3/3 runs; range 45 m)</td>
+        <td>12.7 m/s, <code>crashLanded</code> (range 45 m)</td>
+        <td><em>Not measured with aligned start</em><br/><span style="color:#555;font-size:0.88em;">(unaligned 3-run baseline: 12.7 m/s, <code>crashLanded (destroyed)</code>)</span></td>
+        <td>Category: <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span><br/>Magnitude: <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span><br/>Strict: <span style="background:#1a7f37;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">PASS</span></td>
+      </tr>
+      <tr>
+        <td><code>crash-tilt</code></td>
+        <td>12.7 m/s, <code>crash</code> (3/3 runs; range 45 m)</td>
+        <td>12.7 m/s, <code>crashLanded</code> (range 45 m)</td>
+        <td><em>Not measured with aligned start</em><br/><span style="color:#555;font-size:0.88em;">(unaligned 3-run baseline: 12.7 m/s, <code>crashLanded (destroyed)</code>)</span></td>
+        <td>Category: <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span><br/>Magnitude: <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span><br/>Strict: <span style="background:#1a7f37;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">PASS</span></td>
+      </tr>
+      <tr>
+        <td><code>soft-landing</code></td>
+        <td>0.5-1.1 m/s, <code>soft</code><br/><span style="color:#555;font-size:0.88em;">(<code>verify.mjs</code>: 0.5, 1.0 m/s + 1 unreadable; <code>three-way-aligned</code>: 1.0, 0.7, 1.1 m/s)</span></td>
+        <td>0.23 m/s (0.229 exact / 0.2 rounded), <code>softLanded</code></td>
+        <td><em>Final landing speed &amp; category not measured in aligned run</em><br/><span style="color:#555;font-size:0.88em;">(aligned time-series logged alt/thrust/range/fuel only, reaching 0 m by t=12000ms with 782.8 kg fuel; unaligned 3-run baseline: 4.5-4.6 m/s, <code>hardLanded</code>)</span></td>
+        <td>Category: <span style="background:#1a7f37;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">MATCH</span><br/>Magnitude: <span style="background:#b31d1d;color:#fff;padding:2px 7px;border-radius:4px;font-weight:600;font-size:0.82em;">DIVERGES</span><br/>Strict: <span style="background:#b31d1d;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">FAIL</span></td>
+      </tr>
+    </table>
+    <h3>Earlier unaligned two-rebuild comparison (hand-built vs. AI-only)</h3>
     <table>
       <tr><th>Scenario</th><th>Hand-built reference</th><th>AI-only rebuild (unmodified)</th><th>Outcome category</th></tr>
       

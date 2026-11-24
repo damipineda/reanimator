@@ -1129,6 +1129,62 @@ floor and the repeated aligned runs) - exactly the kind of honest,
 specific finding the "measured, not claimed" principle calls for, rather
 than either a false PASS or a false "never lands."
 
+### The verifier needed verification
+
+Across the `soft-landing` investigation, the verifier harness itself
+proved to have three distinct bugs — each one capable of producing a
+clean, confident-looking, completely wrong conclusion if left unchecked:
+
+1. **Accidental PASS (scoring & landed-detection bugs in `verify.mjs`):**
+   The first version of `verify.mjs` allowed `soft-landing`'s trivial,
+   incidental `range` match (`x = 45` never changes in a vertical
+   scenario) to stand in for an unreadable `landingSpeed`, producing an
+   accidental scenario-level `PASS` and an accidental overall `PASS`
+   verdict. A later check also found `originalLandedByEnd` treating any
+   non-empty OCR text as "landed" (prone to false positives on garbled
+   crops) and a redundant double-negative clause in `categoryMismatch`.
+   Fixed by requiring `landingSpeed` as the primary metric
+   (`NON_COMPARABLE` when unreadable), requiring a parsed number or
+   `score > 0` for `originalLandedByEnd`, and simplifying `categoryMismatch`.
+2. **Unaligned start producing a falsely stable result (`swfClick()`):**
+   `run-original.mjs`'s `swfClick()` spent ~220ms on overlay-dismiss and
+   settle *after* `t0` was captured and *before* the actual start click.
+   On a knife-edge suicide-burn scenario (`soft-landing`), that ~220ms
+   head start was enough to tip every single run into "original never
+   lands by t=21s" across 6/6 runs — looking suspiciously stable and
+   reproducible when it was actually a harness-start artifact. Fixed by
+   splitting into `prepareAlignedClick()` / `triggerAlignedClick()` (and
+   symmetrically in `run-rebuild.mjs`) so settle completes *before* `t0`
+   is captured.
+3. **OCR blocking the real-time key loop (`readAllGauges()` in-loop):**
+   Running Tesseract OCR synchronously inside the real-time
+   scripted-event loop cost several seconds per sample, delaying
+   subsequent scheduled keypresses and sample captures by up to ~970ms
+   of self-inflicted jitter. Even with the aligned start fixed, that
+   jitter produced a spurious "original lands hard at 2.8 m/s" result.
+   Fixed by decoupling fast screenshot capture (real-time-accurate)
+   from post-run OCR on the saved screenshots, dropping baseline jitter
+   to ~48–50ms and revealing that the original actually lands **soft** in
+   3/3 runs (0.5–1.1 m/s across aligned runs), matching the hand-built
+   rebuild's outcome category (`soft`).
+
+**Open root-cause note (kept unresolved, not tuned away):** With all three
+harness bugs fixed, `soft-landing` is a **two-level** result — outcome
+category **MATCH** (both `soft`), magnitude **DIVERGES** (original
+0.5–1.1 m/s across aligned runs vs. hand-built rebuild 0.23 m/s), strict
+verdict **FAIL** unchanged. Free-fall tracks within ~0.6m through
+`t=3700ms`, and the first gap above the noise floor appears at `t=3800ms`
+when thrust engages — even though both sides apply identical thrust
+(`9000 N` then `15750 N`), ruling out input handling. Two candidate
+mechanisms remain undistinguished: (a) a small imprecision in recovered
+mass/thrust constants vs. the true original, or (b) a `dt`-measurement
+difference under Ruffle's AVM1 emulation under large/varying
+acceleration. Constants in `physics.js` are direct transcriptions of
+decompiled literals and were deliberately not tuned to force a match.
+The AI-only rebuild's residual alignment gap (`~37m` vs. `~40.5m` at
+`t=3500ms` under `vy-value` polling, and final landing speed/category
+not measured in the aligned run) also remains open.
+
 ### Demo page, verified Node-independent + prepared for GitHub Pages
 
 Checked that `web/index.html` depends on nothing Node-specific: every

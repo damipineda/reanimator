@@ -93,50 +93,78 @@
     </div>
   </div>
 
-  <h3 style="margin-top:1.6em;">Same 3 scripted scenarios, both rebuilds</h3>
+  <h3 style="margin-top:1.6em;">Final three-way comparison (aligned start) &amp; two-level verdict</h3>
+  <p style="font-size:0.9em;color:#444;">
+    Each scenario is evaluated on <strong>two levels</strong> (keeping the strict overall verdict
+    <code>FAIL</code> unchanged): <strong>outcome category</strong> (<code>soft</code> /
+    <code>hard</code> / <code>crash</code>) and <strong>magnitude</strong> (within the
+    original's measured spread and OCR tolerance). Values not measured under the aligned start
+    are explicitly marked as such.
+  </p>
   <table>
-    <tr><th>Scenario</th><th>Hand-built reference</th><th>AI-only rebuild (3 repeated runs)</th><th>Outcome</th></tr>
     <tr>
-      <td>free-fall</td>
-      <td>12.69 m/s, <code>crashLanded</code></td>
-      <td>12.7 m/s, <code>crashLanded</code> (destroyed) - 12.7, 12.7, 12.7</td>
-      <td class="matches">match</td>
+      <th>Scenario</th>
+      <th>Original (aligned start, Ruffle + OCR)</th>
+      <th>Hand-built reference (aligned start)</th>
+      <th>AI-only rebuild (aligned start)</th>
+      <th>Two-level &amp; strict verdict (original vs. hand-built)</th>
     </tr>
     <tr>
-      <td>crash-tilt</td>
-      <td>12.68 m/s, <code>crashLanded</code></td>
-      <td>12.7 m/s, <code>crashLanded</code> (destroyed) - 12.7, 12.7, 12.7</td>
-      <td class="matches">match</td>
+      <td><code>free-fall</code></td>
+      <td>12.7 m/s, <code>crash</code> (3/3 runs)</td>
+      <td>12.7 m/s, <code>crashLanded</code></td>
+      <td><em>Not measured with aligned start</em><br/><span style="color:#555;font-size:0.85em;">(unaligned 3-run baseline: 12.7 m/s, <code>crashLanded (destroyed)</code>)</span></td>
+      <td>
+        Category: <span class="matches">MATCH</span><br/>
+        Magnitude: <span class="matches">MATCH</span><br/>
+        Strict verdict: <span class="matches">PASS</span>
+      </td>
     </tr>
     <tr>
-      <td>soft-landing</td>
-      <td>1.08 m/s, <code>softLanded</code></td>
-      <td>4.5 m/s, <code>hardLanded</code> - 4.5, 4.5, 4.6</td>
-      <td class="diverges">DIVERGES</td>
+      <td><code>crash-tilt</code></td>
+      <td>12.7 m/s, <code>crash</code> (3/3 runs)</td>
+      <td>12.7 m/s, <code>crashLanded</code></td>
+      <td><em>Not measured with aligned start</em><br/><span style="color:#555;font-size:0.85em;">(unaligned 3-run baseline: 12.7 m/s, <code>crashLanded (destroyed)</code>)</span></td>
+      <td>
+        Category: <span class="matches">MATCH</span><br/>
+        Magnitude: <span class="matches">MATCH</span><br/>
+        Strict verdict: <span class="matches">PASS</span>
+      </td>
+    </tr>
+    <tr>
+      <td><code>soft-landing</code></td>
+      <td>0.5–1.1 m/s, <code>soft</code><br/><span style="color:#555;font-size:0.85em;">(<code>verify.mjs</code>: 0.5, 1.0 m/s + 1 unreadable; <code>three-way-aligned</code>: 1.0, 0.7, 1.1 m/s)</span></td>
+      <td>0.23 m/s, <code>softLanded</code></td>
+      <td><em>Landing speed &amp; category not measured in aligned run</em><br/><span style="color:#555;font-size:0.85em;">(aligned time-series logged alt/thrust/range/fuel only, reaching 0 m by t=12000ms with 782.8 kg fuel; unaligned 3-run baseline: 4.5–4.6 m/s, <code>hardLanded</code>)</span></td>
+      <td>
+        Category: <span class="matches">MATCH</span><br/>
+        Magnitude: <span class="diverges">DIVERGES</span> (0.5–1.1 vs. 0.23 m/s)<br/>
+        Strict verdict: <span class="diverges">FAIL</span>
+      </td>
     </tr>
   </table>
   <p class="note">
     The AI-only rebuild loads and plays with zero console errors in all 3 scenarios, and
-    matches the hand-built reference on 2 of 3. <code>soft-landing</code> diverges
-    consistently (3/3 runs). <strong>Root cause, confirmed by logging thrust/altitude over
-    time in both rebuilds:</strong> not input handling (both register all 7 Up-arrow presses
-    identically, reaching full thrust at the same wall-clock time) and not a physics-formula
-    bug (an idealized, browser-free simulation of both <code>physics.js</code> files lands at
-    nearly the same speed, ~1.83 m/s, both <code>softLanded</code>) - it's a gap in THIS
-    TEST's own synchronization: the hand-built rebuild's clock starts exactly when the test
-    clicks its Start button; the AI-only rebuild auto-starts during its own page load, before
-    the test's clock begins, giving it an unaccounted head start that lands every scripted
-    keypress relatively later on its own internal timeline. Not a bug in the Rewriter's
-    output - a bug in how this specific test measures an auto-starting app. Separately, a
-    multi-round investigation into how the REAL original behaves on this same scripted
-    scenario went through three corrected methodology bugs of its own (a ~220ms click-settle
-    delay, then OCR work delaying the scripted keypresses themselves) before landing on a
-    properly aligned measurement: with that fixed, <strong>the original DOES land, softly,
-    across 3 repeated runs</strong> (1.0, 0.7, 1.1 m/s) - matching the hand-built reference's
-    own category, though the exact magnitude still differs (original ~0.5-1.0 m/s vs. the
-    hand-built rebuild's ~0.2-1.1 m/s depending on the run) by more than measurement noise
-    alone explains - documented as a real, unresolved gap rather than tuned away. Full numbers
-    and the full account of each methodology correction:
+    matches the hand-built reference on 2 of 3 in the earlier unaligned comparison
+    (<code>free-fall</code>, <code>crash-tilt</code>). On <code>soft-landing</code>, the
+    unaligned comparison diverged (hand-built 1.08 m/s <code>softLanded</code> vs. AI-only
+    4.5–4.6 m/s <code>hardLanded</code>). <strong>Root cause, confirmed by logging
+    thrust/altitude over time in both rebuilds:</strong> not input handling (both register all
+    7 Up-arrow presses identically, reaching full thrust at the same wall-clock time) and not a
+    physics-formula bug (an idealized, browser-free simulation of both <code>physics.js</code>
+    files lands at nearly the same speed, ~1.83 m/s, both <code>softLanded</code>) - it's a
+    synchronization gap for an auto-starting app (the hand-built rebuild's clock starts on
+    Start-button click; the AI-only rebuild auto-starts during page load). Even with a tighter
+    <code>vy-value</code> polling alignment, AI-only still showed a smaller residual head start
+    (~37 m vs. ~40.5 m at t=3500ms, left as a known open gap). Separately, a multi-round
+    investigation into how the REAL original behaves on <code>soft-landing</code> uncovered and
+    fixed three harness bugs (accidental PASS, unaligned click-settle delay, and OCR blocking
+    the real-time key loop): with those fixed, <strong>the original DOES land softly across
+    repeated runs</strong> (0.5–1.1 m/s) - matching the hand-built reference's outcome
+    category (<code>soft</code>), though the exact magnitude still diverges (original
+    0.5–1.1 m/s vs. hand-built 0.23 m/s) by more than measurement noise alone explains, so the
+    strict verdict remains <code>FAIL</code> and the root cause (starting at t=3800ms when thrust
+    engages) is documented as open rather than tuned away. Full numbers and account:
     <a href="../docs/verifier-report.html#ai-only" target="_blank">verifier report, "Hand-built
     reference vs. AI-only rebuild"</a>, <a href="../docs/verifier-report.html#noise-floor" target="_blank">"Measurement noise floor"</a>, and <code>docs/KIRO_NOTES.md</code>.
   </p>
