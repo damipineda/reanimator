@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title></title>
+<!-- Document title is set from strings.json at runtime by main.js, per
+     rewriter.md requirement #2 (no user-visible text inline here). -->
+<style>
+  html, body { margin: 0; padding: 0; background: #000; color: #eee; font-family: sans-serif; }
+
+  #stage {
+    position: relative;
+    width: 760px;  /* STAGE_W placeholder, see src/render.js */
+    height: 480px; /* STAGE_H placeholder, see src/render.js */
+    overflow: hidden;
+    background: #111;
+    margin: 0 auto;
+    border: 1px solid #444;
+  }
+
+  #view {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    transform-origin: 0 0;
+  }
+
+  #landerHolder {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    transform: translate(-50%, -100%);
+  }
+
+  #landerBody {
+    width: 100%;
+    height: 100%;
+    background: #ddd; /* real lander-body art not in BehaviorSpec; this is a plain placeholder shape */
+  }
+  #landerBody[data-frame="good"] { background: #ddd; }
+  #landerBody[data-frame="bottomDamage"] { background: #d99; }
+  #landerBody[data-frame="rightDamage"] { background: #d99; }
+  #landerBody[data-frame="leftDamage"] { background: #d99; }
+  #landerBody[data-frame="destroyed"] { background: #811; }
+
+  #thrustFlame {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    width: 6px;
+    height: 20px;
+    margin-left: -3px;
+    background: orangered;
+    transform-origin: top center;
+  }
+
+  .thruster-fx {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: deepskyblue;
+    opacity: 0;
+  }
+  .thruster-fx.active { opacity: 1; }
+  #leftThrusterFx { left: -8px; top: 40%; }
+  #rightThrusterFx { right: -8px; top: 40%; }
+
+  #landingMarksLayer .landing-mark {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: yellow;
+    transform: translate(-50%, 0);
+  }
+
+  #guiPanel {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    background: rgba(0,0,0,0.6);
+    padding: 6px 10px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  #scoreReadout, #pausedSign, #helpPlaque, #landingSpeedReport, #boulderCrashReport {
+    position: absolute;
+    background: rgba(0,0,0,0.75);
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  #scoreReadout { left: 8px; top: 8px; }
+  #pausedSign { left: 50%; top: 40%; transform: translateX(-50%); font-size: 20px; }
+  #helpPlaque { left: 50%; top: 55%; transform: translateX(-50%); max-width: 320px; }
+  #landingSpeedReport { left: 50%; bottom: 10px; transform: translateX(-50%); text-align: center; }
+  #boulderCrashReport { left: 50%; bottom: 60px; transform: translateX(-50%); }
+
+  #velAccArrows { position: absolute; }
+
+  #controls {
+    width: 760px;
+    margin: 8px auto;
+    display: flex;
+    gap: 8px;
+  }
+
+  .control-button {
+    padding: 6px 14px;
+    background: #333;
+    border: 1px solid #666;
+    cursor: pointer;
+    user-select: none;
+  }
+  .control-button span { font-weight: normal; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="view">
+      <div id="velAccArrows" hidden></div>
+      <div id="landingMarksLayer"></div>
+      <div id="landerHolder">
+        <div id="landerBody" data-frame="good"></div>
+        <div id="thrustFlame"></div>
+        <div id="leftThrusterFx" class="thruster-fx"></div>
+        <div id="rightThrusterFx" class="thruster-fx"></div>
+      </div>
+    </div>
+
+    <div id="guiPanel">
+      <div><span id="hudHorizonLabel"></span>: <span id="horizon" style="display:inline-block;">&#8593;</span></div>
+      <div><span id="hudHeightLabel"></span>: <span id="heightReadout">0</span></div>
+      <div><span id="hudThrustLabel"></span>: <span id="thrustReadout">0</span></div>
+      <div><span id="hudRangeLabel"></span>: <span id="rangeReadout">0</span></div>
+      <div><span id="hudFuelLabel"></span>: <span id="fuelGauge"></span></div>
+      <div><span id="hudVYLabel"></span>: <span id="vYGauge"></span></div>
+      <div><span id="hudVXLabel"></span>: <span id="vXGauge"></span></div>
+    </div>
+
+    <div id="scoreReadout"></div>
+    <div id="pausedSign" hidden></div>
+    <div id="helpPlaque" hidden></div>
+
+    <div id="landingSpeedReport" hidden>
+      <div id="landingMessage1"></div>
+      <div id="landingMessage2"></div>
+      <div id="landingMessage3"></div>
+      <div id="landingMessage4"></div>
+    </div>
+
+    <div id="boulderCrashReport" hidden></div>
+  </div>
+
+  <div id="controls">
+    <div id="startButton" class="control-button"><span id="startButtonLabel"></span></div>
+    <div id="resetButton" class="control-button"><span id="resetButtonLabel"></span></div>
+    <div id="helpButton" class="control-button"><span id="helpButtonLabel"></span></div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

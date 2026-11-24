@@ -238,6 +238,155 @@ pipeline code, or keep relying on agent-driven conversions for the hackathon sco
 
 ---
 
+## Phase 1: Formalizing the Pipeline (`src/`)
+
+Scope for this phase, set explicitly by the user on Nov 15, 2026 (deadline Dec 4, 2:00pm PT):
+**one sample end to end, no SCORM, no second sample.** `lunar-lander.swf` lives only at
+`local-samples/lunar-lander.swf` (gitignored); it is never copied into `samples/` and never
+committed — the repo and pipeline must work without it present, with the root `README.md`
+telling a user/judge where to get their own copy (archive.org, hash-verified).
+
+### What moved into `src/`
+- `src/contracts/types.ts` + `behavior-spec.schema.json` + `scenario.schema.json` — the
+  `ExtractionManifest` / `BehaviorSpec` / `Scenario` / `VerifyResult` / `Verdict` /
+  `StageResult<T>` shapes `design.md` describes, as actual TypeScript (strict) + JSON Schema,
+  not just prose.
+- `src/llm/LlmProvider.ts` — the `complete(prompt, schema?)` interface plus
+  `UnconfiguredLlmProvider`, which throws by design rather than silently no-op'ing, so the
+  demo visibly fails closed if nothing wires up a real provider instead of quietly pretending
+  to work. No real HTTP-backed provider exists yet — there is no LLM API key configured in
+  this environment — so Stage 2/3 testing below used `invoke_sub_agent` as a stand-in for a
+  real provider call, not the interface itself. Documented here instead of implied, since
+  claiming otherwise would overstate what's actually wired up.
+- `src/cache/cache.ts` — content-addressed cache (`sha256()` + `readCache()`/`writeCache()`
+  under `src/cache/store/<stage>/<key>.json`), so a verified run can be replayed without
+  calling an LLM again.
+- `src/extract/extract.ts` — thin wrapper around FFDec CLI (`java -jar ffdec-cli.jar -export
+  script|image|text`, jar path from `FFDEC_JAR_PATH`, default `C:\temp\ffdec-cli.jar`).
+  Smoke-tested against the real local-only sample: 344 files extracted,
+  sha256 `bfcc79493c0c7d189140a34c997563eb499c0a791fdfe969bb3463a2001a6a97` — reproducible,
+  not just "ran once."
+- `src/rewrite/reference/lunar-lander/` — the Phase 0 hand-built translation (`physics.js`,
+  `score.js`, `geometry.js`, `scene.js`, `controls.js`, `loop.js`, `state.js`, `strings.js`,
+  `time.js`), moved as-is. **Deliberately kept in plain JS, not converted to TypeScript** —
+  `tech.md` asks for strict TS on pipeline code, but converting ~38 already-tested, already
+  line-cited functions under this deadline was judged not worth the time; this is a known,
+  flagged gap, not an unnoticed one. Re-verified after the move: **38/38 tests passing**
+  (`npx vitest run src/rewrite/reference/lunar-lander/` → `physics.test.mjs` 21,
+  `score.test.mjs` 17).
+- `src/prompts/analyzer.md` / `src/prompts/rewriter.md` — the Stage 2/3 prompts as versioned
+  files (not inline strings), each with explicit hard requirements (cite every rule to a
+  file:line; never invent a value; flag uncertainty in `notes` instead of guessing).
+
+### Fresh-session Analyzer/Rewriter comparison
+
+Ran per the user's instruction: write the prompts as files, then run the Analyzer and
+Rewriter stages in a **fresh session** — no access to `src/rewrite/reference/`, no
+knowledge of each other beyond what one stage's actual output hands to the next — and report
+honestly how far the result lands from the hand-built reference. "Fresh session" here means
+a separate `invoke_sub_agent` dispatch per stage, each given only the files named below via
+`contextFiles`, explicitly told not to search the workspace.
+
+- **Analyzer input:** 4 raw decompiled files — `Lander.as`, `ControlButton.as`,
+  `Constants.as`, main-timeline `frame_1/DoAction.as` (the same 4 files used for the
+  hand-built reference's own citations, confirmed by matching line-293 oddity and `&`-vs-`&&`
+  boulder check — see `notes` below).
+- **Rewriter input:** the Analyzer's full JSON output, unmodified (no manual trimming this
+  time — see "methodology risk" below for why that matters).
+- Output saved at `src/rewrite/fresh-session-2026-11-16/` (`behavior-spec.json`,
+  `rewriter-output/{index.html,strings.json,src/{clock,physics,render,main}.js}`). All JS/JSON
+  syntax-checked (`node --check`, `JSON.parse`) — not run in a browser.
+
+**What matched the hand-built reference, closely:**
+- Every physical constant: `GRAVITY=1.6`, `MAX_THRUST=45000`, `MASS_EMPTY=6839`,
+  `INITIAL_FUEL=816.5`, `SPECIFIC_I=3050`, `SOFT_LANDING_SPEED=2`, `HARD_LANDING_SPEED=6`,
+  `ANGLE_STEP=3°`, `THRUST_STEP=0.05*maxThrust`, initial position `(45, 50)`.
+- The core integration formula (`pos += dt*v + 0.5*dt²*a`, `v += a*dt`, `dt` from a single
+  `now()`, not a fixed step) and the landing classification thresholds, **including the
+  original's own asymmetric quirk** — `angle < 0.2` with no `Math.abs()`, so any negative
+  tilt always passes the soft/hard-landing angle check. The fresh Rewriter reproduced this
+  exactly rather than "fixing" it, because this run gave it the Analyzer's full, untrimmed
+  output (unlike a prior, discarded attempt at this same test — see below).
+- Architecture requirements: pure `(state, ...args) -> newState` physics functions, one
+  `now()`, two separately-named loops (40ms physics `setInterval` vs. `requestAnimationFrame`
+  render loop), `strings.json` for text, per-rule citations in comments, labeled placeholders
+  (not silent guesses) everywhere the BehaviorSpec itself flagged a gap — stage pixel
+  dimensions, camera-pan pixel formula, boulder hit-test geometry, SoundMaker/ScoreKeeper
+  internals.
+
+**Real divergences found, with citations:**
+1. **`currentMass` computed on the wrong side of the fuel-clamp.** The original
+   (`Lander.as:189-193`, confirmed in the hand-built reference's own comment) computes
+   `currentMass = massEmpty + remainingFuel` **before** clamping a negative `remainingFuel`
+   to 0 — so `currentMass` can dip slightly below `massEmpty` for exactly the one tick fuel
+   runs out. The fresh rewrite's `consumeFuel()` (`src/physics.js`) clamps `remainingFuel`
+   to 0 **first**, then computes `currentMass` from the already-clamped value, so that one-tick
+   dip never happens. Neither the Analyzer's rule text nor its notes called out this
+   ordering, so the Rewriter had no way to know statement order mattered here — a case where
+   the BehaviorSpec's prose ("fuel is consumed each tick as...; currentMass is recomputed
+   as...") was accurate about the formula but silent about sequencing, and sequencing turned
+   out to matter.
+2. **Negative `setThrust()` requests are not left unchanged.** The original
+   (`Lander.as:204-231`) only matches `thrust>=0 && thrust<=max` or `thrust>max`; a negative
+   request matches neither branch, so `this.thrust` is left **completely unchanged** (a real
+   quirk: `decreaseThrust()` below a certain point silently does nothing until the exact
+   arithmetic would land on 0). The Analyzer's rule for `setThrust()` only described the
+   `[0,maxThrust]` and `>maxThrust` cases and never mentioned negative input at all — a real
+   gap in the spec, not an error — and the fresh Rewriter filled that gap with a plausible
+   but wrong guess, clamping any `requestedThrust <= 0` to exactly 0. This is the one place
+   the Rewriter silently guessed instead of flagging the gap, despite rewriter.md's
+   requirement #7 telling it not to — worth tightening the prompt for next time (e.g.
+   "if a rule only describes some branches of a conditional, treat the missing branches as
+   unspecified, not as 0/false/no-op").
+3. **Literal UI strings were in the given source but didn't reach the Rewriter.** The exact
+   wording for `softLanding_str`, `hardLanding_str`, `crashDamaged_str`, `crashKilled_str`
+   ("Soft Landing.", "Hard Landing", "Crash landing, legs damaged.", "Crash landing, crew
+   killed.") is sitting in plain string literals inside `frame_1/DoAction.as`, which the
+   Analyzer did read. But the BehaviorSpec schema has no field for "literal string constants
+   found in the source" — only `rules` (behavior) and `notes` (open questions) — so the
+   Analyzer's rule describing the landing-report message selection cited the variable names
+   (`softLanding_str`, etc.) without quoting their literal values, and the Rewriter correctly
+   (per its own instructions) treated anything not given to it as unspecified and filled
+   `strings.json` with `[placeholder: ... not specified]` text for all four messages, even
+   though the real English text was available the entire time, one stage earlier. This is a
+   schema gap, not a Rewriter failure: `analyzer.md`/`behavior-spec.schema.json` should add an
+   explicit field for literal user-facing strings found in the source, separate from `rules`.
+4. **Boulder-collision hit-testing, score, camera-pan pixel formula, and real on-stage
+   geometry are absent** — expected and self-reported by the fresh Rewriter in its own
+   comments. This is not a Rewriter shortcoming: the 4 files given to this fresh Analyzer
+   don't include `ScoreKeeper.as`, `Util.as`, or any placement/shape data (the hand-built
+   reference only got that geometry via a separate FFDec **XFL** export pass, not from AS
+   source files at all — see Task 0.4's "real landing-spot and boulder geometry" note above).
+   Scoped out of this test on purpose, not missed.
+
+**Methodology risk, found and then corrected before being written up:** an earlier attempt
+at this same test (same day) manually trimmed the Analyzer's JSON before pasting it into the
+Rewriter's prompt, as a stand-in for a human/relay step. That trimming accidentally dropped
+the rule describing what happens when vertical velocity goes negative again after landing
+(`Lander.as:127-132`) — the mechanic that lets the lander take off again by increasing thrust,
+which the original's own help text documents. Losing that one rule meant the Rewriter's
+`stepPhysics()` stopped updating entirely once landed, breaking re-ignition. That run's output
+was lost to a transient tool error before it could be saved, so the test was redone from
+scratch feeding the Rewriter the Analyzer's **full, untrimmed** JSON (closer to how a real
+automated pipeline hands data between stages) — and, as shown above, re-ignition now works
+correctly. The real lesson survives independent of that specific lost run: **any pipeline step
+that is not a direct, lossless handoff between stages is a place information can silently
+disappear**, and a production version of Stage 2→3 must pass the Analyzer's full structured
+output directly, never a hand-edited or hand-summarized version of it.
+
+**Overall assessment:** for the physics/control surface the 4 given files actually describe,
+the fresh, from-scratch Analyzer→Rewriter run lands close to the hand-built reference —
+every constant, the core integration, and the original's own quirks (the asymmetric angle
+check) came through correctly once the full BehaviorSpec reached the Rewriter intact. The two
+real behavioral misses (fuel-clamp ordering, negative-thrust handling) are both genuine but
+narrow: one is an unstated statement-order dependency, the other is a spec gap the Rewriter
+filled by guessing instead of flagging. The UI-string gap is a schema shortcoming (no field
+for literal source text) rather than either stage behaving incorrectly given what it was
+asked for. None of this was run in a browser — these are static/syntax-level findings, not a
+verified-at-runtime equivalence claim.
+
+---
+
 ## Kiro Usage Patterns
 
 ### Specs vs Vibe Coding

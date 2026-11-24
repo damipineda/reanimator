@@ -1,0 +1,44 @@
+{
+  "_comment": "rewriter.md requirement #2: all user-visible text lives here, nowhere inline in the JS/HTML. Entries marked [placeholder] stand in for original text that the BehaviorSpec references by variable name only (e.g. softLanding_str) but does not give the literal wording for - see behavior-spec.json's 'notes' array (SimStrings/Internationalizer were not provided).",
+
+  "meta": {
+    "title": "Lunar Lander (PhET-style AS2 simulation)"
+  },
+
+  "buttons": {
+    "start": "Start",
+    "reset": "Reset",
+    "help": "Help"
+  },
+
+  "pausedSign": "Paused",
+
+  "helpPlaque": "Controls: Left/Right arrows rotate, Up/Down arrows adjust thrust, Space toggles full thrust, P pauses, R resets.",
+
+  "hud": {
+    "horizonLabel": "Horizon",
+    "heightLabel": "Height (m)",
+    "thrustLabel": "Thrust",
+    "rangeLabel": "Range (m)",
+    "fuelLabel": "Fuel",
+    "vYLabel": "Vertical speed (m/s)",
+    "vXLabel": "Horizontal speed (m/s)",
+    "placeholderGauge": "[placeholder: original gauge widget not specified]"
+  },
+
+  "score": {
+    "placeholderTemplate": "Landings: {landings} [placeholder: ScoreKeeper scoring not specified]"
+  },
+
+  "landingReport": {
+    "speedTemplate": "Landing speed = {speed} m/s",
+    "softLanding": "[placeholder: softLanding_str text not specified]",
+    "hardLanding": "[placeholder: hardLanding_str text not specified]",
+    "crashDamaged": "[placeholder: crashDamaged_str text not specified]",
+    "crashKilled": "[placeholder: crashKilled_str text not specified]",
+    "softCountTemplate": "Soft landings: {count}",
+    "hardCountTemplate": "Hard landings: {count}"
+  },
+
+  "boulderCrashReport": "Boulder collision"
+}
