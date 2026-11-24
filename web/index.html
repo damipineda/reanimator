@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Reanimator demo: Lunar Lander</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; line-height: 1.5; }
+  h1 { font-size: 1.6em; margin-bottom: 4px; }
+  h2 { margin-top: 2.6em; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+  .subtitle { color: #555; margin-top: 0; }
+  .attribution {
+    background: #eef6ff; border: 1px solid #b8d8ff; border-radius: 6px;
+    padding: 14px 18px; font-size: 0.92em; margin: 18px 0;
+  }
+  .attribution strong { display: block; margin-bottom: 4px; }
+  .modified-notice { color: #a04b00; font-weight: 600; }
+  iframe { width: 100%; border: 1px solid #ccc; border-radius: 4px; }
+  #game-frame { height: 660px; }
+  #report-frame { height: 480px; }
+  table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 0.9em; }
+  th, td { border: 1px solid #ccc; padding: 5px 9px; text-align: left; vertical-align: top; }
+  th { background: #f3f3f3; }
+  .provenance-recovered { background: #eaf7ea; }
+  .provenance-supplied { background: #fff6e0; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 0.78em; font-weight: 600; }
+  .pill-recovered { background: #1a7f37; color: #fff; }
+  .pill-supplied { background: #c07a00; color: #fff; }
+  .note { background: #fff8e1; border-left: 4px solid #e0a800; padding: 10px 14px; font-size: 0.88em; margin: 1em 0; }
+  code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; }
+  .count-badge { color: #555; font-size: 0.85em; font-weight: normal; }
+  .fallback-link { font-size: 0.85em; }
+</style>
+</head>
+<body>
+  <h1>Reanimator: Lunar Lander</h1>
+  <p class="subtitle">
+    A decompiled Flash/AS2 simulation (PhET's Lunar Lander), rebuilt as editable HTML5/JS,
+    with a measured (not claimed) equivalence check against the original. Everything on
+    this page is read from already-generated, cached files - no API key, no live LLM call,
+    no network request other than this page's own same-origin files.
+  </p>
+
+  <div class="attribution">
+    <strong>Attribution (CC BY 3.0 US)</strong>
+    PhET Interactive Simulations<br />
+    University of Colorado<br />
+    <a href="https://phet.colorado.edu" target="_blank" rel="noopener">https://phet.colorado.edu</a>
+    <p class="modified-notice">This work has been modified from the original: it is an independent HTML5/JS reconstruction derived by decompiling and analyzing the original Flash (.swf) file, not the original simulation itself.</p>
+    <p style="margin-bottom:0;font-size:0.85em;color:#555;">
+      The original <code>.swf</code> file is NOT distributed with this project and is not
+      used by anything on this page - the game below is a standalone rebuild. See
+      <code>samples/SOURCES.md</code> for this sample's full provenance/license record and
+      why the original file stays local-only, never committed.
+    </p>
+  </div>
+
+  <h2>Play the rebuild</h2>
+  <p>
+    Hand-built HTML5/JS reconstruction (<code>src/rewrite/reference/lunar-lander/</code>),
+    citation-linked line-by-line to the decompiled source, 38 unit tests, and verified
+    against the real original below. Arrow keys rotate/thrust, Space toggles full thrust,
+    R resets. Click Start to begin.
+  </p>
+  <iframe id="game-frame" src="../src/rewrite/reference/lunar-lander/index.html" title="Lunar Lander rebuild"></iframe>
+
+  <h2>Verifier report</h2>
+  <p>
+    Real scripted scenarios, run against the actual original (via a self-hosted Ruffle
+    build, read through OCR) and the rebuild (read through its own debug state), with the
+    honest result - including where OCR or timing made a comparison impossible, and a
+    mutation test measuring what the verifier can and can't catch.
+    <span class="fallback-link"><a href="../docs/verifier-report.html" target="_blank">Open full report in a new tab</a></span>
+  </p>
+  <iframe id="report-frame" src="../docs/verifier-report.html" title="Verifier report"></iframe>
+
+  <h2>BehaviorSpec, with assumptions <span class="count-badge" id="spec-counts"></span></h2>
+  <p class="note">
+    This is the Analyzer/Rewriter PIPELINE's own fresh-session output
+    (<code>src/rewrite/fresh-session-2026-11-16/</code>) - a separate test of the automated
+    conversion stages, run in an isolated context with no access to the hand-built game
+    above. It is <strong>not</strong> what produced the playable rebuild - that one was
+    built directly in-session, documented in <code>docs/KIRO_NOTES.md</code>. Shown here
+    because this is the version of the BehaviorSpec contract that actually has an
+    <code>assumptions</code> field: every gap the source left unspecified that the pipeline
+    had to fill with a concrete choice, recorded instead of hidden in a comment.
+  </p>
+  <div id="spec-root">Loading BehaviorSpec…</div>
+
+  <h2>Strings: recovered vs. supplied</h2>
+  <p>
+    Every user-visible string in the hand-built rebuild, with its real provenance kept per
+    entry: <span class="pill pill-recovered">recovered</span> text was compiled into the
+    original <code>.swf</code> and extracted verbatim (FFDec <code>-export text</code>);
+    <span class="pill pill-supplied">supplied</span> text is original English written for
+    this rebuild because the SWF's own lookup for that string fails at runtime (a real bug
+    in the original - see <code>src/rewrite/reference/strings-report.md</code>) and has no
+    working fallback.
+  </p>
+  <div id="strings-root">Loading strings…</div>
+
+  <footer style="margin-top:3em;color:#777;font-size:0.85em;">
+    Generated from cached pipeline/verifier output - see <code>docs/KIRO_NOTES.md</code> for
+    the full development record, including this verifier's own measured blind spots.
+  </footer>
+
+<script type="module">
+async function loadJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return res.json();
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function renderBehaviorSpec() {
+  const root = document.getElementById('spec-root');
+  try {
+    const [spec, rewriterAssumptions] = await Promise.all([
+      loadJSON('../src/rewrite/fresh-session-2026-11-16/behavior-spec.json'),
+      loadJSON('../src/rewrite/fresh-session-2026-11-16/rewriter-output/assumptions.json'),
+    ]);
+    document.getElementById('spec-counts').textContent =
+      `(${spec.rules.length} rules, ${spec.literalStrings.length} literal strings, ${rewriterAssumptions.length} assumptions, ${spec.notes.length} open notes)`;
+
+    const rulesRows = spec.rules
+      .map((r) => `<tr><td>${esc(r.description)}</td><td>${esc(r.citation || '—')}</td></tr>`)
+      .join('');
+    const rewriterAssumptionRows = rewriterAssumptions
+      .map((a) => `<tr><td>${esc(a.description)}</td><td>${esc(a.choiceMade)}</td><td>${esc(a.citation || '—')}</td></tr>`)
+      .join('');
+    const literalRows = spec.literalStrings
+      .map((l) => `<tr><td>${esc(l.name)}</td><td>"${esc(l.value)}"</td><td>${esc(l.citation || '—')}</td></tr>`)
+      .join('');
+    const notesRows = spec.notes.map((n) => `<li>${esc(n)}</li>`).join('');
+
+    root.innerHTML = `
+      <h3>${esc(spec.title)}</h3>
+      <details open>
+        <summary><strong>Assumptions made while REWRITING this spec into code (${rewriterAssumptions.length})</strong> - every gap the BehaviorSpec left unspecified that the Rewriter had to fill with a concrete choice, recorded instead of hidden in a code comment. (Note: the BehaviorSpec's OWN <code>assumptions</code> field - for gaps the Analyzer itself had to resolve - is empty here; the Analyzer preferred leaving things as open "notes" below instead. The 14 below are the Rewriter's, a separate file.)</summary>
+        <table><tr><th>What was unspecified</th><th>Choice made</th><th>Citation</th></tr>${rewriterAssumptionRows}</table>
+      </details>
+      <details>
+        <summary><strong>Literal strings (${spec.literalStrings.length})</strong> - quoted verbatim from the source</summary>
+        <table><tr><th>Source name</th><th>Literal text</th><th>Citation</th></tr>${literalRows}</table>
+      </details>
+      <details>
+        <summary><strong>Rules (${spec.rules.length})</strong></summary>
+        <table><tr><th>Rule</th><th>Citation</th></tr>${rulesRows}</table>
+      </details>
+      <details>
+        <summary><strong>Open notes (${spec.notes.length})</strong> - things the Analyzer could not verify</summary>
+        <ul>${notesRows}</ul>
+      </details>
+    `;
+  } catch (err) {
+    root.innerHTML = `<p style="color:#b31d1d;">Could not load BehaviorSpec: ${esc(err.message)}. This page must be served over HTTP (see web/serve.mjs), not opened as a file:// URL.</p>`;
+  }
+}
+
+async function renderStrings() {
+  const root = document.getElementById('strings-root');
+  try {
+    const strings = await loadJSON('../src/rewrite/reference/strings.json');
+    const entries = Object.entries(strings).filter(([key]) => key !== '_meta');
+    const recovered = entries.filter(([, v]) => v.provenance === 'recovered');
+    const supplied = entries.filter(([, v]) => v.provenance === 'supplied');
+
+    function row([key, v]) {
+      const cls = v.provenance === 'recovered' ? 'provenance-recovered' : 'provenance-supplied';
+      const pill = v.provenance === 'recovered'
+        ? '<span class="pill pill-recovered">recovered</span>'
+        : '<span class="pill pill-supplied">supplied</span>';
+      const value = esc(v.value).replace(/\n/g, '<br/>');
+      return `<tr class="${cls}"><td>${esc(key)}</td><td>${value}</td><td>${pill}</td><td>${esc(v.note || '')}</td></tr>`;
+    }
+
+    root.innerHTML = `
+      <p><strong>${recovered.length}</strong> recovered, <strong>${supplied.length}</strong> supplied, out of ${entries.length} total.</p>
+      <table>
+        <tr><th>Key</th><th>Text</th><th>Provenance</th><th>Note</th></tr>
+        ${entries.map(row).join('')}
+      </table>
+    `;
+  } catch (err) {
+    root.innerHTML = `<p style="color:#b31d1d;">Could not load strings.json: ${esc(err.message)}. This page must be served over HTTP (see web/serve.mjs), not opened as a file:// URL.</p>`;
+  }
+}
+
+renderBehaviorSpec();
+renderStrings();
+</script>
+</body>
+</html>

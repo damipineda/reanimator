@@ -7,7 +7,17 @@
 
 let data = null;
 
-export async function loadStrings(url = '/strings.json') {
+// Relative, not absolute: strings.json is always ONE DIRECTORY ABOVE
+// index.html in this project (src/rewrite/reference/strings.json, vs.
+// src/rewrite/reference/lunar-lander/index.html) - see
+// work/lunar-lander/serve.mjs's own original comment ("single source of
+// truth, no copy"). A relative '../strings.json' resolves correctly
+// against THIS PAGE's URL regardless of what a server's root directory
+// happens to be, unlike a hardcoded absolute '/strings.json', which only
+// worked before because of a specific, undocumented server-root
+// assumption that a later verifier script (src/verify/) didn't know to
+// match - see docs/KIRO_NOTES.md.
+export async function loadStrings(url = '../strings.json') {
     const res = await fetch(url);
     if (!res.ok) {
         throw new Error(`Failed to load strings.json: HTTP ${res.status}`);

@@ -5,7 +5,7 @@
 // which has no such bridge into the real SWF - see docs/KIRO_NOTES.md).
 import { chromium } from 'playwright';
 import { startStaticServer, stopStaticServer } from './static-server.mjs';
-import { REFERENCE_REBUILD_DIR } from './config.mjs';
+import { REFERENCE_REBUILD_ROOT, REFERENCE_REBUILD_APP_PATH } from './config.mjs';
 
 const PORT = 8091;
 
@@ -33,12 +33,17 @@ const KEYCODES = { ArrowLeft: 37, ArrowRight: 39, ArrowUp: 38, ArrowDown: 40, Sp
 // test's whole point is that the harness driving both must be identical,
 // otherwise a difference in RESULTS could just be a difference in HARNESS
 // behavior instead of the injected bug.
-export async function runScenarioAgainstBuild(scenario, rootDir = REFERENCE_REBUILD_DIR, port = PORT) {
+export async function runScenarioAgainstBuild(
+  scenario,
+  rootDir = REFERENCE_REBUILD_ROOT,
+  port = PORT,
+  appPath = REFERENCE_REBUILD_APP_PATH
+) {
   const server = await startStaticServer(rootDir, port);
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({ viewport: scenario.viewport });
-    await page.goto(`http://localhost:${port}/index.html`, { waitUntil: 'networkidle' });
+    await page.goto(`http://localhost:${port}${appPath}`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(200);
 
     // Click the canvas-drawn Start button. Computed from the canvas's
@@ -94,5 +99,5 @@ export async function runScenarioAgainstBuild(scenario, rootDir = REFERENCE_REBU
 }
 
 export function runScenarioAgainstRebuild(scenario) {
-  return runScenarioAgainstBuild(scenario, REFERENCE_REBUILD_DIR, PORT);
+  return runScenarioAgainstBuild(scenario, REFERENCE_REBUILD_ROOT, PORT, REFERENCE_REBUILD_APP_PATH);
 }

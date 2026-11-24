@@ -108,9 +108,19 @@ export async function verifyScenario(scenario, { originalRuns = 3 } = {}) {
   const rebuildLanded = rebuildResult.final.crashState !== 'inFlight';
   const categoryMismatch = rebuildLanded !== originalLandedByEnd && !(originalLandedByEnd && !originalNeverLanded);
 
-  const comparable = landingSpeedOk !== null || rangeOk !== null;
-  const numericOk = [landingSpeedOk, rangeOk].filter((v) => v !== null).every(Boolean);
-  const allOk = numericOk && !categoryMismatch;
+  // landingSpeed is the PRIMARY metric every one of these scenarios
+  // exists to check (it's what decides crashLanded/hardLanded/softLanded
+  // - the whole point of each scenario). `range` is secondary/
+  // supplementary context, not a substitute: a scenario whose primary
+  // metric could not be measured (OCR failure - see soft-landing's known
+  // message-crop gap) must be reported as NON_COMPARABLE, never as a
+  // PASS resting only on an incidental secondary match. This was a real
+  // bug in an earlier version of this scoring (see
+  // docs/KIRO_NOTES.md) that silently turned "we couldn't measure the
+  // thing this scenario is for" into an accidental PASS.
+  const primaryComparable = landingSpeedOk !== null;
+  const secondaryOk = rangeOk === null || rangeOk;
+  const allOk = Boolean(landingSpeedOk) && secondaryOk && !categoryMismatch;
 
   const diffPct =
     landingSpeedSpread.mean && rebuildLandingSpeed !== null
@@ -119,13 +129,17 @@ export async function verifyScenario(scenario, { originalRuns = 3 } = {}) {
 
   const result = {
     scenarioId: scenario.id,
-    status: categoryMismatch ? 'FAIL' : !comparable ? 'NON_COMPARABLE' : allOk ? 'PASS' : 'FAIL',
+    status: categoryMismatch ? 'FAIL' : !primaryComparable ? 'NON_COMPARABLE' : allOk ? 'PASS' : 'FAIL',
     maxDiffPct: diffPct,
     worstCheckpoint: lastCheckpoint,
     artifacts: originalResults.flatMap((r) =>
       Object.values(r.checkpoints || {}).map((c) => c.screenshot)
     ),
-    notes: null,
+    notes: categoryMismatch
+      ? 'Episode-ended mismatch: one side landed/crashed by the final checkpoint and the other had not - see detail.originalLandedByEnd/rebuildLanded.'
+      : !primaryComparable
+        ? 'NON_COMPARABLE: landing speed (the primary metric this scenario measures) could not be read via OCR from the original for any of the runs - see detail.original.raw[].landingMessageRaw.'
+        : null,
     detail: {
       original: {
         runs: originalResults.length,

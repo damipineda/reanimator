@@ -6,7 +6,7 @@ import { startPhysicsLoop, startVisualLoop } from './loop.js';
 import { detectLanding, detectBoulderCrash } from './score.js';
 
 async function main() {
-    await strings.loadStrings('/strings.json');
+    await strings.loadStrings(); // '../strings.json', relative to this page - see strings.js
 
     const canvas = document.getElementById('stage');
     const ctx = canvas.getContext('2d');

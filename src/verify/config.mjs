@@ -15,6 +15,14 @@ export const SWF_PATH =
 export const RUFFLE_JS_PATH =
   process.env.RUFFLE_JS_PATH || path.join(REPO_ROOT, 'local-samples', 'ruffle', 'ruffle.js');
 
-export const REFERENCE_REBUILD_DIR = path.join(REPO_ROOT, 'src', 'rewrite', 'reference', 'lunar-lander');
+// Server ROOT for the rebuild is the PARENT of lunar-lander/, not
+// lunar-lander/ itself: strings.js fetches '../strings.json' relative to
+// index.html (src/rewrite/reference/lunar-lander/index.html ->
+// src/rewrite/reference/strings.json), matching the single canonical
+// copy's real location (see work/lunar-lander/serve.mjs's original
+// design and docs/KIRO_NOTES.md for why an absolute '/strings.json' path
+// and a mismatched server root silently broke this once already).
+export const REFERENCE_REBUILD_ROOT = path.join(REPO_ROOT, 'src', 'rewrite', 'reference');
+export const REFERENCE_REBUILD_APP_PATH = '/lunar-lander/index.html';
 
 export { REPO_ROOT };

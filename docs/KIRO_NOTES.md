@@ -423,23 +423,64 @@ the Help-button pause path, not the P-key path), and missing audio
 for the exact gap the first comparison found: *"the one place the Rewriter
 silently guessed instead of flagging the gap."*
 
-### Real bug found: the reference rebuild had never actually been run in a browser
+### Correction: how "verified live via Playwright in Phase 0" and "never loaded in a browser" both happened
 
-Building the verifier's `run-rebuild.mjs` (serves
-`src/rewrite/reference/lunar-lander/` and loads it in real Playwright)
-failed immediately: `strings.js`'s `loadStrings('/strings.json')` 404'd.
-`strings.json` had landed one directory **above** `index.html`
-(`src/rewrite/reference/strings.json`, alongside the Markdown reports)
-when the reference was moved into `src/` last session, instead of next to
-`index.html` where the app actually fetches it from. The whole Stage
-1-3 build was unit-tested (38 `vitest` tests on `physics.js`/`score.js`)
-but **never once loaded as a live page** until this verifier work tried
-to - the unit tests don't touch `index.html` or `strings.json` at all.
-Fixed by copying `strings.json` next to `index.html`
-(`src/rewrite/reference/lunar-lander/strings.json`). Lesson: a green unit
-test suite is not the same claim as "the app runs," and this project's own
-"measured, not claimed" principle means an actual browser load should have
-been part of Stage 1's own exit criteria, not deferred to Stage 4.
+An earlier version of this note claimed the reference rebuild had "never
+once loaded as a live page" before this verifier work. **That overstated
+the problem and is corrected here** - this project's own Phase 0 work
+(Task 0.4b, above) genuinely DID load and drive the SAME rebuild live via
+Playwright, 5 real runs, reading `window.__reanimator.getState()`
+(`work/lunar-lander/compare/run-rebuild.mjs`), with real matching numbers
+(12.67-12.69 m/s). That happened and is real. So how did building this
+session's verifier immediately hit a 404 on `strings.json`?
+
+**The actual cause, found by comparing both setups byte-for-byte:**
+`strings.json` has ALWAYS lived one directory above `index.html`
+(`work/lunar-lander/strings.json` next to `work/lunar-lander/html5/`, and
+later `src/rewrite/reference/strings.json` next to
+`src/rewrite/reference/lunar-lander/`) - the move into `src/` did NOT
+change this relationship, and Phase 0's `strings.js` always fetched it via
+a hardcoded **absolute** path, `/strings.json`. That absolute path only
+ever resolved correctly because Phase 0's own
+`work/lunar-lander/serve.mjs` deliberately set its HTTP server's ROOT
+directory to `work/lunar-lander/` (the PARENT of `html5/`), with a comment
+saying exactly why: *"so the page at html5/index.html can fetch
+/strings.json as a sibling file."* This session's new
+`src/verify/static-server.mjs`-based harness, built without re-reading
+that comment, served `src/rewrite/reference/lunar-lander/` itself as its
+root (the app's own folder, not its parent) - under that root,
+`/strings.json` has nothing to resolve to, hence the 404. The file layout
+was never broken; a NEW tool (this session's verifier) just didn't
+reproduce the specific, undocumented-outside-one-code-comment server
+configuration the absolute path secretly depended on.
+
+**First fix attempted (a workaround, not the real fix):** copied
+`strings.json` into `lunar-lander/` so it would resolve under either
+server configuration. This worked but left two independent copies of the
+same file free to drift apart over time - a real, if minor, hazard
+introduced by patching the symptom.
+
+**Actual fix:** changed `strings.js`'s fetch to a **relative** path,
+`'../strings.json'`, which resolves correctly against the PAGE's own URL
+regardless of what directory any server happens to treat as its root -
+removing the fragility entirely rather than papering over one more
+instance of it. Removed the duplicate file; updated
+`src/verify/config.mjs` so `run-rebuild.mjs`/`mutation-test.mjs` now serve
+`src/rewrite/reference/` (the correct parent) with the app loaded at
+`/lunar-lander/index.html`, matching Phase 0's original, proven-correct
+design instead of guessing a new one. Re-verified: same numbers as before
+(12.68-12.69 m/s range), confirming this was a tooling-configuration gap,
+not a behavior change.
+
+**The real, generalizable lesson** (keeping this, since it's still true
+even though the specific "never loaded" claim was wrong): a passing unit
+test suite (38 tests on `physics.js`/`score.js` alone) does not, by
+itself, prove a specific NEW serving setup will load the app correctly -
+that depends on configuration (server root, absolute vs. relative paths)
+that unit tests never exercise at all. The fix here was to make the
+loading path itself independent of server configuration, rather than
+re-deriving (or re-documenting) the one correct configuration every time
+a new tool needs to serve the app.
 
 ### Scenarios + real comparison (free-fall, soft-landing, crash-tilt)
 
@@ -478,16 +519,41 @@ SWF). 3 scenarios, each with a scripted key timeline, committed under
   the OCR/UI to observe.
 
 **Real run (3x original via Ruffle+OCR, 1x rebuild via exact state) -
-overall verdict: PASS.** `free-fall` and `crash-tilt` matched exactly
-(original and rebuild both read 12.7 m/s landing speed, range 45m, all 3
-original runs identical to the OCR's own 1-decimal precision).
-`soft-landing` passed on the category check (did it land? yes, both
-sides) and range, but its landing-speed comparison is **NON_COMPARABLE**:
-the landing-message OCR crop was calibrated against the original's
-*crash* message layout (`"keyNotFound<speed> m/s"`); a soft/hard-landing
-message renders differently and OCR returned garbled text
-(e.g. `"- KEE"`), not a parseable number - a genuine, newly-found
-calibration gap in the OCR method, reported rather than hidden. In one
+overall verdict: PARTIAL, not PASS - see the scoring-bug correction
+below for why that distinction matters.** `free-fall` and `crash-tilt`
+are a clean **PASS** (original and rebuild both read 12.7 m/s landing
+speed, range 45m, all 3 original runs identical to the OCR's own
+1-decimal precision). `soft-landing` is **NON_COMPARABLE**: landing
+speed - the PRIMARY thing this scenario exists to measure - could not be
+read via OCR from the original on any of the 3 runs (the landing-message
+crop was calibrated against the original's *crash* message layout,
+`"keyNotFound<speed> m/s"`; a soft/hard-landing message renders
+differently and OCR returned garbled text, e.g. `"- KEE"`, not a
+parseable number). `soft-landing`'s category check (did it land? yes,
+both sides) and `range` both happened to match, but that is NOT enough
+to call it PASS when the one thing the scenario was built to check
+couldn't be read at all - see below.
+
+**A real scoring bug, found and fixed before this was reported as a
+headline PASS:** the first version of `verify.mjs`'s scoring let
+`soft-landing`'s trivial, incidental `range` match (x never changes in a
+purely-vertical scenario) stand in for its unmeasurable `landingSpeed`,
+producing an accidental scenario-level **PASS** and an accidental overall
+**PASS** verdict - exactly the kind of "claims equivalence it didn't
+measure" mistake this project's own `product.md` principle exists to
+catch. Fixed by making `landingSpeed` the required PRIMARY metric for
+every one of these 3 scenarios (each one exists specifically to classify
+a landing outcome): if it can't be read, the scenario is
+`NON_COMPARABLE`, full stop, regardless of what any secondary field
+shows. After the fix: `soft-landing` -> `NON_COMPARABLE`, and
+`computeVerdict()`'s existing (unit-tested, property-tested) monotonicity
+logic correctly turns that into an overall **PARTIAL**, not PASS - the
+aggregation logic was right all along; only the per-scenario
+classification feeding it was wrong. `docs/verifier-report.html` now
+states explicitly, in its own words, what PARTIAL means here: *"2/3
+scenarios fully measured and matching; 1 scenario NOT measurable at all
+for its primary metric, so neither confirmed nor refuted"* - not a
+passing grade rounded up, and not a failure either. In one
 earlier test iteration of this exact scenario (before the final tuning
 pass above), the original had not yet landed - still slowly ascending -
 at the same checkpoint where the rebuild had already landed softly: this
@@ -518,11 +584,15 @@ AFTER clamping `remainingFuel` to 0, instead of before - see this file's
 earlier comparison section), and re-runs `free-fall` against both the
 mutant and the untouched reference.
 
-**Result, measured not assumed: the verifier does NOT catch this bug.**
-Correct build lands at 12.6832 m/s; mutant lands at 12.6784 m/s - a
-difference of **0.0048 m/s**, versus the original's own measured spread of
-12.7-12.7 m/s (1-decimal display precision). Both the correct build and
-the mutant read as "12.7" and both fall inside the original's spread.
+**Result, measured not assumed, confirmed across repeated runs: the
+verifier does NOT catch this bug.** Across several real runs after the
+server-root fix above, the measured difference between the correct build
+and the mutant ranged from ~3.5e-15 m/s (floating-point noise, same tick
+timing) up to ~0.01 m/s (different real tick timing between runs) -
+consistently 1-2 orders of magnitude below the original's own 1-decimal
+display precision (0.1 m/s) either way. Both the correct build and the
+mutant always read as "12.7" and both always fall inside the original's
+measured spread (12.7-12.7 m/s).
 Hand-computed earlier (before this real run) why: the bug's effect on
 `currentMass` is a one-tick, ~0.004% relative perturbation, and
 `currentMass` is never itself a displayed quantity in either the original
@@ -543,6 +613,49 @@ comparing only externally observable outcomes, at any tolerance coarse
 enough to tolerate the original's own 1-decimal display, structurally
 cannot. Both are real tools with different, now-measured reach, not one
 "better" than the other.
+
+### Known blind spots of this verifier (documented, not hidden)
+
+Collecting all three measured gaps in one place, since a reader scanning
+only `docs/verifier-report.html`'s PARTIAL badge should not have to
+reconstruct this from three different sections:
+
+1. **Sub-display-precision internal-state bugs are invisible.** The
+   mutation test above measured this directly: a real, previously-found
+   bug (`currentMass` computed on the wrong side of a fuel clamp)
+   produces roughly a 0.01 m/s effect on landing speed, versus the
+   original's own 1-decimal display precision (0.1 m/s) - the bug is
+   real and a unit test catches it instantly, but no screenshot/OCR or
+   exact-state comparison AT THIS TOLERANCE ever will, because the
+   original itself cannot display the difference. Any bug whose effect
+   stays under roughly 0.05 m/s on this particular field is in the same
+   blind spot.
+2. **OCR calibration does not generalize across message layouts.** The
+   landing-message crop coordinates were calibrated against one specific
+   message shape (the crash message, `"keyNotFound<speed> m/s"`); a
+   soft/hard-landing message uses different layout and OCR could not read
+   a number from it at all (`soft-landing`'s `NON_COMPARABLE` result).
+   This is a calibration gap in the OCR method as implemented here, not a
+   fundamental limit of OCR - a future pass could add a second calibrated
+   crop for that message shape - but as of this report it is a real,
+   open gap, not a hidden one.
+3. **Tightly-timed scripted scenarios can straddle a real decision
+   boundary.** The `soft-landing` scenario's burn timing was tuned close
+   enough to the softLanded/hardLanded edge that one test iteration saw
+   the original still ascending at a checkpoint where the rebuild had
+   already landed - a real, reproducible risk for any scenario scripted
+   close to a threshold, not specific to this one scenario or this one
+   run. A scenario built with a wider safety margin from its target
+   threshold is less exposed to this; `soft-landing`'s final tuning
+   (comfortable ~1.0 m/s vs. the 2 m/s threshold) reduces but does not
+   eliminate it.
+
+None of these three change the verifier's PASS results for `free-fall`/
+`crash-tilt` into something less certain - those two matched on their
+primary metric with real margin. They are reported here because a
+verifier whose limits are undocumented is indistinguishable from one that
+has none, and this project's stated principle is "equivalence is
+measured, never claimed."
 
 ### Property tests (3, `fast-check`, under top-level `tests/`)
 
@@ -595,6 +708,39 @@ the hook file one directory **above** this repository
 control; worth double-checking after any future `createHook` call in this
 environment rather than assuming the path matches the rest of this
 session's file operations.
+
+### Demo page (`web/index.html`) + README
+
+Built a single static demo page, `web/index.html` (served by
+`web/serve.mjs`, reusing `src/verify/static-server.mjs` - no new
+dependency), showing: the rebuilt game, playable, in an iframe; the
+already-generated `docs/verifier-report.html` in another iframe, with the
+corrected PARTIAL badge and its "what this verdict actually means" line;
+the fresh-session BehaviorSpec's rules/literal-strings/open-notes, PLUS
+the Rewriter's 14 recorded assumptions (fetched from a separate file,
+`rewriter-output/assumptions.json` - see "Contract change" above for why
+assumptions live there rather than on the BehaviorSpec itself in
+practice); the hand-built rebuild's full recovered-vs-supplied string
+table (39 recovered / 5 supplied, from `strings-report.md`/`strings.json`,
+with each entry's own provenance tag and the CC BY 3.0 attribution text +
+modification notice from `samples/SOURCES.md`, both exactly as that file
+specifies. **Everything on the page is `fetch()`-read from files already
+committed in this repo** - no API key, no live LLM call, no read of
+`local-samples/` or any `.swf`. Verified by actually loading it in
+Playwright (not just written and assumed to work): confirmed 27 rules, 8
+literal strings, 14 assumptions, 9 open notes, and 44 string entries (39
+recovered / 5 supplied) all render with no console errors.
+
+Updated the root `README.md` with: how to run `npm test` (and that it
+deliberately excludes `work/`/`local-samples/`); how to view the demo
+page; how to run the full verifier if you have the local-only assets
+(now spelling out that the self-hosted Ruffle build needs its two
+`.wasm` files alongside `ruffle.js`, not just the `.js` file, which this
+session's own verifier build also had to discover the hard way); and a
+short map of what lives under `src/rewrite/reference/` vs.
+`src/rewrite/fresh-session-2026-11-16/`, since the demo page shows pieces
+of both and that distinction needs to be obvious to a reader, not
+assumed.
 
 ---
 

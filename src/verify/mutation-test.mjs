@@ -15,10 +15,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScenarioAgainstBuild } from './run-rebuild.mjs';
-import { REFERENCE_REBUILD_DIR } from './config.mjs';
+import { REFERENCE_REBUILD_ROOT, REFERENCE_REBUILD_APP_PATH } from './config.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const MUTANT_DIR = path.join(HERE, '..', '..', 'work', 'mutation-test', 'lunar-lander-fuel-clamp-bug'); // gitignored (/work/)
+// Mirrors the whole reference/ folder (not just lunar-lander/) - see the
+// comment on copyRecursive's call site below for why.
+const MUTANT_DIR = path.join(HERE, '..', '..', 'work', 'mutation-test', 'reference-fuel-clamp-bug'); // gitignored (/work/)
 const MUTANT_PORT = 8095;
 
 function copyRecursive(src, dst) {
@@ -58,11 +60,16 @@ function injectFuelClampOrderingBug(physicsJsPath) {
 
 export async function runMutationTest(scenario, originalSpread) {
   fs.rmSync(path.dirname(MUTANT_DIR), { recursive: true, force: true });
-  copyRecursive(REFERENCE_REBUILD_DIR, MUTANT_DIR);
-  injectFuelClampOrderingBug(path.join(MUTANT_DIR, 'src', 'physics.js'));
+  // Copies the whole reference/ folder (not just lunar-lander/), since
+  // that is the real server ROOT the app needs (see config.mjs /
+  // docs/KIRO_NOTES.md: strings.js fetches '../strings.json' relative to
+  // index.html, so the mutant must preserve the same parent/child
+  // relationship, not just the lunar-lander/ subfolder in isolation).
+  copyRecursive(REFERENCE_REBUILD_ROOT, MUTANT_DIR);
+  injectFuelClampOrderingBug(path.join(MUTANT_DIR, 'lunar-lander', 'src', 'physics.js'));
 
-  const correctResult = await runScenarioAgainstBuild(scenario, REFERENCE_REBUILD_DIR, 8094);
-  const mutantResult = await runScenarioAgainstBuild(scenario, MUTANT_DIR, MUTANT_PORT);
+  const correctResult = await runScenarioAgainstBuild(scenario, REFERENCE_REBUILD_ROOT, 8094, REFERENCE_REBUILD_APP_PATH);
+  const mutantResult = await runScenarioAgainstBuild(scenario, MUTANT_DIR, MUTANT_PORT, REFERENCE_REBUILD_APP_PATH);
 
   const correctSpeed = correctResult.final.landingSpeed;
   const mutantSpeed = mutantResult.final.landingSpeed;

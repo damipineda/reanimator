@@ -19,7 +19,11 @@
 </head>
 <body>
   <h1>Reanimator verifier report: Lunar Lander</h1>
-  <p class="overall">Overall verdict: <span style="background:#1a7f37;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">PASS</span></p>
+  <p class="overall">Overall verdict: <span style="background:#9a6700;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">PARTIAL</span></p>
+  <p class="note" style="font-size:1em;">
+    <strong>What this verdict actually means:</strong> 2/3 scenario(s) fully measured and matching (crash-tilt, free-fall); 1 scenario(s) NOT measurable at all for their primary metric, so neither confirmed nor refuted (soft-landing).
+    PARTIAL here means "no measured divergence, but not everything could be measured" - it is NOT a passing grade rounded up, and it is NOT a failure; it is reported as its own, distinct outcome, exactly as design.md's verdict model (PASS/PARTIAL/FAIL) defines it. See each scenario's "within spread?" row and note below for exactly which metric, for which scenario, could not be read.
+  </p>
   <p>
     Compares the real original (PhET's Lunar Lander .swf, run via a self-hosted Ruffle build,
     read via OCR - no JS bridge exists into it) against the hand-built HTML5 rebuild
@@ -95,7 +99,7 @@
   </section>
 
   <section class="scenario">
-    <h3>soft-landing <span style="background:#1a7f37;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">PASS</span></h3>
+    <h3>soft-landing <span style="background:#555;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">NON_COMPARABLE</span></h3>
     <p>A &#39;suicide burn&#39;: free-fall (no thrust) for the first 3.74s, then 7 discrete Up-arrow presses fired 20ms apart (each one +2250 thrust via increaseThrust(), reaching 15750 total) to decelerate sharply before touchdown. Timeline found by src/verify/design-soft-landing.mjs (idealized fixed-40ms-tick simulation of the reference physics.js, predicting ~0.58 m/s). An earlier 9-press/5.0s candidate (idealized prediction ~0.97 m/s) measured 2.05-2.06 m/s against the REAL rebuild in a browser - over the 2 m/s threshold - because real Playwright/CDP dispatch latency between 9 rapid keydown calls delays full thrust more than the idealized simulation accounts for (a systematic effect, not the random per-tick jitter an earlier +/-40%-jitter check had tested for). This 7-press/3.74s config was chosen by testing several candidates directly against the real rebuild and was then repeated 3x for consistency: measured 1.01, 0.96, 1.08 m/s across those 3 real runs, all comfortably softLanded - see docs/KIRO_NOTES.md for the full account of finding and fixing the first (too-marginal) candidate.</p>
     <p><strong>Expected outcome:</strong> softLanded with a comfortable real-world margin (~1.0 m/s vs. the 2 m/s threshold, measured over 3 real runs). Angle stays 0 throughout since no Left/Right key is ever sent.</p>
     <h4>Scripted key timeline</h4>
@@ -106,7 +110,7 @@
       <tr>
         <td>Landing speed (m/s)</td>
         <td>—</td><td>—</td><td>—</td>
-        <td>1.1</td>
+        <td>1</td>
         <td>N/A (OCR unreadable)</td>
       </tr>
       <tr>
@@ -137,16 +141,16 @@
     <p><span style="background:#b31d1d;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">FAIL</span> verifier did NOT catch the injected bug</p>
     <table>
       <tr><th></th><th>Landing speed (m/s)</th><th>Within original's measured spread (12.7-12.7)?</th></tr>
-      <tr><td>Correct reference build</td><td>12.683</td><td>✓</td></tr>
-      <tr><td>Mutant (fuel-clamp-ordering bug injected)</td><td>12.678</td><td>✓</td></tr>
-      <tr><td>Difference caused by the bug</td><td colspan="2">0.005 m/s</td></tr>
+      <tr><td>Correct reference build</td><td>12.693</td><td>✓</td></tr>
+      <tr><td>Mutant (fuel-clamp-ordering bug injected)</td><td>12.693</td><td>✓</td></tr>
+      <tr><td>Difference caused by the bug</td><td colspan="2">0 m/s</td></tr>
     </table>
     <p class="note">
       The injected bug is the EXACT divergence found in the fresh-session Rewriter test
       (docs/KIRO_NOTES.md, finding #1): <code>currentMass</code> is computed AFTER clamping
       <code>remainingFuel</code> to 0 instead of before, so <code>currentMass</code> never dips
       slightly below <code>massEmpty</code> for the one tick fuel runs out. The real effect on
-      landing speed is 0.005 m/s out of a ~12.683 m/s
+      landing speed is 0 m/s out of a ~12.693 m/s
       landing - far smaller than the original's own 1-decimal-place display precision, so
       <strong>this specific bug is invisible to this verifier at its current tolerance</strong>,
       honestly reported as a measured limit rather than claimed as a success. The verifier DOES

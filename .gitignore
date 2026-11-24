@@ -19,6 +19,12 @@ coverage/
 # for why this folder exists.
 local-samples/
 
+# tesseract.js (src/verify/ocr.mjs) downloads this to the repo root on
+# first run of each OCR worker if no cache dir is configured - happened
+# twice already (see docs/KIRO_NOTES.md), ignore it outright rather than
+# remembering to delete it by hand every time.
+eng.traineddata
+
 # Scratch/working directory: FFDec exports and Ruffle test harness
 # output, including renders/screenshots derived from files whose
 # license is not yet confirmed (see samples/SOURCES.md). Not part of

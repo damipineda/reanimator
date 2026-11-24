@@ -35,7 +35,67 @@ to actually exercise the pipeline against it:
 3. Run the pipeline/tests pointed at that local path (see
    `docs/KIRO_NOTES.md` for the exact commands used during development).
 
+## Run the tests
+```
+npm test
+```
+Runs the hand-built rebuild's 38 unit tests plus 3 property-based tests
+(`tests/`, using `fast-check`) - none of these need `local-samples/` or any
+network access. `vitest.config.mjs` excludes `work/` and `local-samples/`
+from test discovery on purpose.
+
+## View the demo page (no API key, no live LLM call, no original SWF needed)
+```
+node web/serve.mjs
+```
+then open `http://localhost:8099/web/index.html`. Shows the rebuilt game
+(playable), the already-generated verifier report, the BehaviorSpec with
+its recorded assumptions, the recovered-vs-supplied string table, and the
+required PhET attribution/modification notice. Everything on that page is
+read from files already committed in this repo - it does not touch
+`local-samples/` or call any LLM.
+
+You can also open `docs/verifier-report.html` directly (same requirement:
+served over HTTP, not opened as a `file://` URL, since it fetches nothing
+itself but the demo page embedding it does).
+
+## Running the full verifier (optional, needs local-only assets)
+`src/verify/verify.mjs` drives the REAL original (via a self-hosted Ruffle
+build + OCR) and the rebuild (via its own debug state) through 3 scripted
+scenarios and produces `work/verify-results/*.json` (gitignored) plus
+`docs/verifier-report.html`. This needs, in addition to
+`local-samples/lunar-lander.swf` (above):
+
+- `local-samples/ruffle/ruffle.js` and its two companion `.wasm` files
+  (a self-hosted Ruffle build - see https://ruffle.rs for the selfhosted
+  package; the two `.wasm` files must sit next to `ruffle.js`, not just
+  the `.js` file by itself).
+
+Then:
+```
+node src/verify/verify.mjs      # all 3 scenarios, writes work/verify-results/
+node src/verify/mutation-test.mjs  # re-injects a real, previously-found bug and measures whether the verifier catches it
+node src/verify/report.mjs      # regenerates docs/verifier-report.html from the results above
+```
+The repo and its tests work without any of this present; it is only needed
+to reproduce the verifier's own measurements from scratch rather than
+reading the already-committed `docs/verifier-report.html`.
+
+## Pipeline artifacts
+- `src/contracts/` - shared TypeScript types + JSON Schemas for every
+  stage's input/output (`BehaviorSpec`, `Scenario`, `VerifyResult`,
+  `Verdict`, `RewriteOutput`, ...).
+- `src/prompts/` - the Analyzer and Rewriter stage prompts, as versioned
+  files.
+- `src/rewrite/reference/lunar-lander/` - the hand-built HTML5/JS rebuild
+  (the one the demo page plays and the verifier checks).
+- `src/rewrite/fresh-session-2026-11-16/` - a separate, fresh-context test
+  of the automated Analyzer -> Rewriter pipeline against the same source,
+  kept for an honest comparison against the hand-built version (see
+  `docs/KIRO_NOTES.md`).
+
 ## Status
 See `.kiro/specs/reanimator-core/tasks.md` for the current task checklist and
 `docs/KIRO_NOTES.md` for a running log of findings, decisions, and
-Kiro-usage notes.
+Kiro-usage notes - including the verifier's own measured blind spots (it
+does not catch every real bug, and says so).

@@ -145,6 +145,17 @@ function assumptionsSection(assumptions) {
   );
 }
 
+function verdictSummary(verdict) {
+  const pass = verdict.results.filter((r) => r.status === 'PASS').map((r) => r.scenarioId);
+  const fail = verdict.results.filter((r) => r.status === 'FAIL').map((r) => r.scenarioId);
+  const nc = verdict.results.filter((r) => r.status === 'NON_COMPARABLE').map((r) => r.scenarioId);
+  const parts = [];
+  if (pass.length) parts.push(`${pass.length}/${verdict.results.length} scenario(s) fully measured and matching (${pass.join(', ')})`);
+  if (fail.length) parts.push(`${fail.length} scenario(s) measured and DIVERGING (${fail.join(', ')})`);
+  if (nc.length) parts.push(`${nc.length} scenario(s) NOT measurable at all for their primary metric, so neither confirmed nor refuted (${nc.join(', ')})`);
+  return parts.join('; ') + '.';
+}
+
 export function generateReport() {
   const verdict = JSON.parse(fs.readFileSync(path.join(RESULTS_DIR, 'verdict.json'), 'utf8'));
   const mutationPath = path.join(RESULTS_DIR, 'mutation-test.json');
@@ -185,6 +196,10 @@ export function generateReport() {
 <body>
   <h1>Reanimator verifier report: Lunar Lander</h1>
   <p class="overall">Overall verdict: ${statusBadge(verdict.status)}</p>
+  <p class="note" style="font-size:1em;">
+    <strong>What this verdict actually means:</strong> ${esc(verdictSummary(verdict))}
+    ${verdict.status === 'PARTIAL' ? 'PARTIAL here means "no measured divergence, but not everything could be measured" - it is NOT a passing grade rounded up, and it is NOT a failure; it is reported as its own, distinct outcome, exactly as design.md\'s verdict model (PASS/PARTIAL/FAIL) defines it. See each scenario\'s "within spread?" row and note below for exactly which metric, for which scenario, could not be read.' : ''}
+  </p>
   <p>
     Compares the real original (PhET's Lunar Lander .swf, run via a self-hosted Ruffle build,
     read via OCR - no JS bridge exists into it) against the hand-built HTML5 rebuild
