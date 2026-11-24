@@ -2,28 +2,58 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Reanimator demo: Lunar Lander</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; line-height: 1.5; }
-  h1 { font-size: 1.6em; margin-bottom: 4px; }
-  h2 { margin-top: 2.6em; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
-  .subtitle { color: #555; margin-top: 0; }
-  .attribution {
-    background: #eef6ff; border: 1px solid #b8d8ff; border-radius: 6px;
-    padding: 14px 18px; font-size: 0.92em; margin: 18px 0;
+  h1 { font-size: 1.6em; margin: 0 0 6px; }
+  h3 { margin-bottom: 4px; }
+  code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; }
+
+  /* ---- first screen ---- */
+  .lede { font-size: 1.1em; color: #333; margin: 0 0 16px; }
+  #game-frame { display: block; width: 100%; height: 660px; border: 1px solid #ccc; border-radius: 4px; }
+  .game-caption { font-size: 0.85em; color: #555; margin: 6px 0 14px; }
+  .summary { list-style: none; margin: 0 0 14px; padding: 0; }
+  .summary li { padding: 8px 12px; margin-bottom: 6px; border-left: 5px solid #999; background: #f7f7f7; border-radius: 0 4px 4px 0; }
+  .summary li.ok { border-left-color: #1a7f37; }
+  .summary li.bad { border-left-color: #b31d1d; }
+  .summary li.open { border-left-color: #9a6700; }
+  .summary .label { font-weight: 700; }
+  .summary .ok .label { color: #1a7f37; }
+  .summary .bad .label { color: #b31d1d; }
+  .summary .open .label { color: #9a6700; }
+  .more-hint { font-size: 0.85em; color: #555; margin: 0 0 14px; }
+  /* Narrow screens: game, then summary (stacked). Wide screens: side by side so the
+     whole first screen (sentence + game + summary) is visible without scrolling. */
+  .first { display: block; }
+  @media (min-width: 1100px) {
+    body { max-width: 1240px; }
+    .first { display: grid; grid-template-columns: 822px minmax(0, 1fr); gap: 24px; align-items: start; }
+    .first .side { position: sticky; top: 12px; }
   }
+
+  .attribution { background: #eef6ff; border: 1px solid #b8d8ff; border-radius: 6px; padding: 10px 14px; font-size: 0.82em; margin: 0 0 22px; }
   .attribution strong { display: block; margin-bottom: 4px; }
   .modified-notice { color: #a04b00; font-weight: 600; }
+
+  /* ---- collapsible sections ---- */
+  details.section { border: 1px solid #ddd; border-radius: 6px; margin: 10px 0; background: #fff; }
+  details.section > summary { cursor: pointer; padding: 12px 16px; font-weight: 600; font-size: 1.02em; list-style-position: inside; }
+  details.section[open] > summary { border-bottom: 1px solid #eee; }
+  details.section > .body { padding: 4px 16px 14px; }
+
+  /* ---- content inside the sections (unchanged styling) ---- */
   iframe { width: 100%; border: 1px solid #ccc; border-radius: 4px; }
-  #game-frame { height: 660px; }
   #report-frame { height: 480px; }
   .rebuild-columns { display: flex; gap: 18px; flex-wrap: wrap; }
-  .rebuild-column { flex: 1 1 440px; min-width: 320px; }
+  .rebuild-column { flex: 1 1 440px; min-width: 280px; }
   .rebuild-column h3 { margin-bottom: 2px; }
   .rebuild-column iframe { height: 460px; }
   .rebuild-caption { font-size: 0.85em; color: #555; margin-top: 4px; }
   .diverges { color: #b31d1d; font-weight: 600; }
   .matches { color: #1a7f37; font-weight: 600; }
+  .table-wrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 0.9em; }
   th, td { border: 1px solid #ccc; padding: 5px 9px; text-align: left; vertical-align: top; }
   th { background: #f3f3f3; }
@@ -33,189 +63,245 @@
   .pill-recovered { background: #1a7f37; color: #fff; }
   .pill-supplied { background: #c07a00; color: #fff; }
   .note { background: #fff8e1; border-left: 4px solid #e0a800; padding: 10px 14px; font-size: 0.88em; margin: 1em 0; }
-  code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; }
   .count-badge { color: #555; font-size: 0.85em; font-weight: normal; }
   .fallback-link { font-size: 0.85em; }
 </style>
 </head>
 <body>
+
+  <!-- ===================== FIRST SCREEN ===================== -->
   <h1>Reanimator: Lunar Lander</h1>
-  <p class="subtitle">
-    A decompiled Flash/AS2 simulation (PhET's Lunar Lander), rebuilt as editable HTML5/JS,
-    with a measured (not claimed) equivalence check against the original. Everything on
-    this page is read from already-generated, cached files - no API key, no live LLM call,
-    no network request other than this page's own same-origin files.
+  <p class="lede">
+    Reanimator rebuilds an old Flash simulation (PhET's Lunar Lander) as editable HTML5/JS and
+    measures, instead of claiming, how closely the rebuild matches the original.
   </p>
 
-  <div class="attribution">
-    <strong>Attribution (CC BY 3.0 US)</strong>
-    PhET Interactive Simulations<br />
-    University of Colorado<br />
-    <a href="https://phet.colorado.edu" target="_blank" rel="noopener">https://phet.colorado.edu</a>
-    <p class="modified-notice">This work has been modified from the original: it is an independent HTML5/JS reconstruction derived by decompiling and analyzing the original Flash (.swf) file, not the original simulation itself.</p>
-    <p style="margin-bottom:0;font-size:0.85em;color:#555;">
-      The original <code>.swf</code> file is NOT distributed with this project and is not
-      used by anything on this page - the game below is a standalone rebuild. See
-      <a href="../NOTICE.md" target="_blank">NOTICE.md</a> for exactly which files in this
-      repository are this CC BY 3.0 derivative work (vs. Reanimator's own MIT-licensed code),
-      and <code>samples/SOURCES.md</code> for this sample's full provenance/license record and
-      why the original file stays local-only, never committed.
-    </p>
-  </div>
-
-  <h2>Play the rebuild</h2>
-  <p>
-    Two independent rebuilds of the same decompiled source, run through the SAME 3 scripted
-    verifier scenarios, side by side. Neither was tuned to make this comparison look better -
-    the AI-only rebuild in particular was run exactly as the Rewriter stage produced it.
-  </p>
-
-  <div class="rebuild-columns">
-    <div class="rebuild-column">
-      <h3>Hand-built reference</h3>
-      <p class="rebuild-caption">
-        Written directly against the decompiled source, citation-linked line-by-line, 38 unit
-        tests (<code>src/rewrite/reference/lunar-lander/</code>). Arrow keys rotate/thrust,
-        Space toggles full thrust, R resets. Click Start to begin.
-      </p>
+  <div class="first">
+    <div class="game">
       <iframe id="game-frame" src="../src/rewrite/reference/lunar-lander/index.html" title="Hand-built Lunar Lander rebuild"></iframe>
-    </div>
-    <div class="rebuild-column">
-      <h3>AI-only rebuild (unmodified)</h3>
-      <p class="rebuild-caption">
-        Produced by the Analyzer/Rewriter pipeline in an isolated test session, with NO access
-        to the hand-built code above (<code>src/rewrite/fresh-session-2026-11-16/rewriter-output/</code>).
-        Shown exactly as generated - no bug fixes, no timing tuning. Starts automatically (its
-        own Rewriter's documented assumption - nothing in the source said what should trigger
-        the start); same controls otherwise.
+      <p class="game-caption">
+        Playable hand-built rebuild. Arrow keys rotate/thrust, Space toggles full thrust, R resets.
+        Click Start to begin.
       </p>
-      <iframe id="ai-game-frame" src="../src/rewrite/fresh-session-2026-11-16/rewriter-output/index.html" title="AI-only Lunar Lander rebuild"></iframe>
+    </div>
+
+    <div class="side">
+      <ul class="summary" aria-label="Result summary">
+        <li class="ok"><span class="label">Matched:</span>
+          free-fall and crash-tilt. The rebuild and the real original both crash at 12.7 m/s
+          (original run 3 times).</li>
+        <li class="bad"><span class="label">Did not match:</span>
+          soft-landing. Both land softly, but the original touches down at 0.5&ndash;1.1 m/s and the
+          rebuild at 0.23 m/s, a gap larger than measurement noise explains. Overall verdict:
+          <strong>FAIL</strong>, so not equivalent.</li>
+        <li class="open"><span class="label">Not established:</span>
+          only 3 scripted scenarios were measured, and the cause of the soft-landing gap is
+          unresolved (nothing was tuned to hide it).</li>
+      </ul>
+      <p class="more-hint">Evidence, assumptions, strings and logs are in the collapsible sections below.</p>
+
+      <div class="attribution">
+        <strong>Attribution (CC BY 3.0 US)</strong>
+        PhET Interactive Simulations<br />
+        University of Colorado<br />
+        <a href="https://phet.colorado.edu" target="_blank" rel="noopener">https://phet.colorado.edu</a>
+        <p class="modified-notice">This work has been modified from the original: it is an independent HTML5/JS reconstruction derived by decompiling and analyzing the original Flash (.swf) file, not the original simulation itself.</p>
+        <p style="margin-bottom:0;font-size:0.85em;color:#555;">
+          The original <code>.swf</code> file is NOT distributed with this project and is not
+          used by anything on this page - the game above is a standalone rebuild. See
+          <a href="../NOTICE.md" target="_blank">NOTICE.md</a> for exactly which files in this
+          repository are this CC BY 3.0 derivative work (vs. Reanimator's own MIT-licensed code),
+          and <code>samples/SOURCES.md</code> for this sample's full provenance/license record and
+          why the original file stays local-only, never committed.
+        </p>
+      </div>
     </div>
   </div>
 
-  <h3 style="margin-top:1.6em;">Final three-way comparison (aligned start) &amp; two-level verdict</h3>
-  <p style="font-size:0.9em;color:#444;">
-    Each scenario is evaluated on <strong>two levels</strong> (keeping the strict overall verdict
-    <code>FAIL</code> unchanged): <strong>outcome category</strong> (<code>soft</code> /
-    <code>hard</code> / <code>crash</code>) and <strong>magnitude</strong> (within the
-    original's measured spread and OCR tolerance). Values not measured under the aligned start
-    are explicitly marked as such.
-  </p>
-  <table>
-    <tr>
-      <th>Scenario</th>
-      <th>Original (aligned start, Ruffle + OCR)</th>
-      <th>Hand-built reference (aligned start)</th>
-      <th>AI-only rebuild (aligned start)</th>
-      <th>Two-level &amp; strict verdict (original vs. hand-built)</th>
-    </tr>
-    <tr>
-      <td><code>free-fall</code></td>
-      <td>12.7 m/s, <code>crash</code> (3/3 runs)</td>
-      <td>12.7 m/s, <code>crashLanded</code></td>
-      <td><em>Not measured with aligned start</em><br/><span style="color:#555;font-size:0.85em;">(unaligned 3-run baseline: 12.7 m/s, <code>crashLanded (destroyed)</code>)</span></td>
-      <td>
-        Category: <span class="matches">MATCH</span><br/>
-        Magnitude: <span class="matches">MATCH</span><br/>
-        Strict verdict: <span class="matches">PASS</span>
-      </td>
-    </tr>
-    <tr>
-      <td><code>crash-tilt</code></td>
-      <td>12.7 m/s, <code>crash</code> (3/3 runs)</td>
-      <td>12.7 m/s, <code>crashLanded</code></td>
-      <td><em>Not measured with aligned start</em><br/><span style="color:#555;font-size:0.85em;">(unaligned 3-run baseline: 12.7 m/s, <code>crashLanded (destroyed)</code>)</span></td>
-      <td>
-        Category: <span class="matches">MATCH</span><br/>
-        Magnitude: <span class="matches">MATCH</span><br/>
-        Strict verdict: <span class="matches">PASS</span>
-      </td>
-    </tr>
-    <tr>
-      <td><code>soft-landing</code></td>
-      <td>0.5–1.1 m/s, <code>soft</code><br/><span style="color:#555;font-size:0.85em;">(<code>verify.mjs</code>: 0.5, 1.0 m/s + 1 unreadable; <code>three-way-aligned</code>: 1.0, 0.7, 1.1 m/s)</span></td>
-      <td>0.23 m/s, <code>softLanded</code></td>
-      <td><em>Landing speed &amp; category not measured in aligned run</em><br/><span style="color:#555;font-size:0.85em;">(aligned time-series logged alt/thrust/range/fuel only, reaching 0 m by t=12000ms with 782.8 kg fuel; unaligned 3-run baseline: 4.5–4.6 m/s, <code>hardLanded</code>)</span></td>
-      <td>
-        Category: <span class="matches">MATCH</span><br/>
-        Magnitude: <span class="diverges">DIVERGES</span> (0.5–1.1 vs. 0.23 m/s)<br/>
-        Strict verdict: <span class="diverges">FAIL</span>
-      </td>
-    </tr>
-  </table>
-  <p class="note">
-    The AI-only rebuild loads and plays with zero console errors in all 3 scenarios, and
-    matches the hand-built reference on 2 of 3 in the earlier unaligned comparison
-    (<code>free-fall</code>, <code>crash-tilt</code>). On <code>soft-landing</code>, the
-    unaligned comparison diverged (hand-built 1.08 m/s <code>softLanded</code> vs. AI-only
-    4.5–4.6 m/s <code>hardLanded</code>). <strong>Root cause, confirmed by logging
-    thrust/altitude over time in both rebuilds:</strong> not input handling (both register all
-    7 Up-arrow presses identically, reaching full thrust at the same wall-clock time) and not a
-    physics-formula bug (an idealized, browser-free simulation of both <code>physics.js</code>
-    files lands at nearly the same speed, ~1.83 m/s, both <code>softLanded</code>) - it's a
-    synchronization gap for an auto-starting app (the hand-built rebuild's clock starts on
-    Start-button click; the AI-only rebuild auto-starts during page load). Even with a tighter
-    <code>vy-value</code> polling alignment, AI-only still showed a smaller residual head start
-    (~37 m vs. ~40.5 m at t=3500ms, left as a known open gap). Separately, a multi-round
-    investigation into how the REAL original behaves on <code>soft-landing</code> uncovered and
-    fixed three harness bugs (accidental PASS, unaligned click-settle delay, and OCR blocking
-    the real-time key loop): with those fixed, <strong>the original DOES land softly across
-    repeated runs</strong> (0.5–1.1 m/s) - matching the hand-built reference's outcome
-    category (<code>soft</code>), though the exact magnitude still diverges (original
-    0.5–1.1 m/s vs. hand-built 0.23 m/s) by more than measurement noise alone explains, so the
-    strict verdict remains <code>FAIL</code> and the root cause (starting at t=3800ms when thrust
-    engages) is documented as open rather than tuned away. Full numbers and account:
-    <a href="../docs/verifier-report.html#ai-only" target="_blank">verifier report, "Hand-built
-    reference vs. AI-only rebuild"</a>, <a href="../docs/verifier-report.html#noise-floor" target="_blank">"Measurement noise floor"</a>, and <code>docs/KIRO_NOTES.md</code>.
-  </p>
+  <!-- ===================== DETAILS (all collapsed) ===================== -->
 
-  <h2>Verifier report</h2>
-  <p>
-    Real scripted scenarios, run (by the project author, locally, with their own copy of
-    the original file) against the actual original - via a self-hosted Ruffle build, read
-    through OCR - and the rebuild (read through its own debug state), with the honest
-    result - including where OCR or timing made a comparison impossible, and a mutation
-    test measuring what the verifier can and can't catch.
-    <span class="fallback-link"><a href="../docs/verifier-report.html" target="_blank">Open full report in a new tab</a></span>
-  </p>
-  <p class="note">
-    This report (and this whole public page) contains <strong>no screenshots or any other
-    render of the original .swf</strong> - only numbers/text derived from runs performed
-    locally. The original's license status is not yet fully confirmed (see
-    <code>samples/SOURCES.md</code>), so no image of it is included here, by the same
-    precaution that keeps the file itself out of this repository.
-  </p>
-  <iframe id="report-frame" src="../docs/verifier-report.html" title="Verifier report"></iframe>
+  <details class="section" data-lazy>
+    <summary>Detailed comparison: original vs. hand-built vs. AI-only rebuild</summary>
+    <div class="body">
+      <p>
+        Two independent rebuilds of the same decompiled source, run through the SAME 3 scripted
+        verifier scenarios, side by side. Neither was tuned to make this comparison look better -
+        the AI-only rebuild in particular was run exactly as the Rewriter stage produced it.
+      </p>
 
-  <h2>BehaviorSpec, with assumptions <span class="count-badge" id="spec-counts"></span></h2>
-  <p class="note">
-    This is the Analyzer/Rewriter PIPELINE's own fresh-session output
-    (<code>src/rewrite/fresh-session-2026-11-16/</code>) - a separate test of the automated
-    conversion stages, run in an isolated context with no access to the hand-built game
-    above. It is <strong>not</strong> what produced the playable rebuild - that one was
-    built directly in-session, documented in <code>docs/KIRO_NOTES.md</code>. Shown here
-    because this is the version of the BehaviorSpec contract that actually has an
-    <code>assumptions</code> field: every gap the source left unspecified that the pipeline
-    had to fill with a concrete choice, recorded instead of hidden in a comment.
-  </p>
-  <div id="spec-root">Loading BehaviorSpec…</div>
+      <div class="rebuild-columns">
+        <div class="rebuild-column">
+          <h3>Hand-built reference</h3>
+          <p class="rebuild-caption">
+            Written directly against the decompiled source, citation-linked line-by-line, 38 unit
+            tests (<code>src/rewrite/reference/lunar-lander/</code>). This is the game playable at the
+            top of the page. Arrow keys rotate/thrust, Space toggles full thrust, R resets. Click
+            Start to begin.
+          </p>
+        </div>
+        <div class="rebuild-column">
+          <h3>AI-only rebuild (unmodified)</h3>
+          <p class="rebuild-caption">
+            Produced by the Analyzer/Rewriter pipeline in an isolated test session, with NO access
+            to the hand-built code above (<code>src/rewrite/fresh-session-2026-11-16/rewriter-output/</code>).
+            Shown exactly as generated - no bug fixes, no timing tuning. Starts automatically (its
+            own Rewriter's documented assumption - nothing in the source said what should trigger
+            the start); same controls otherwise.
+          </p>
+          <iframe id="ai-game-frame" data-src="../src/rewrite/fresh-session-2026-11-16/rewriter-output/index.html" title="AI-only Lunar Lander rebuild"></iframe>
+        </div>
+      </div>
 
-  <h2>Strings: recovered vs. supplied</h2>
-  <p>
-    Every user-visible string in the hand-built rebuild, with its real provenance kept per
-    entry: <span class="pill pill-recovered">recovered</span> text was compiled into the
-    original <code>.swf</code> and extracted verbatim (FFDec <code>-export text</code>);
-    <span class="pill pill-supplied">supplied</span> text is original English written for
-    this rebuild because the SWF's own lookup for that string fails at runtime (a real bug
-    in the original - see <code>src/rewrite/reference/strings-report.md</code>) and has no
-    working fallback.
-  </p>
-  <div id="strings-root">Loading strings…</div>
+      <h3 style="margin-top:1.6em;">Final three-way comparison (aligned start) &amp; two-level verdict</h3>
+      <p style="font-size:0.9em;color:#444;">
+        Each scenario is evaluated on <strong>two levels</strong> (keeping the strict overall verdict
+        <code>FAIL</code> unchanged): <strong>outcome category</strong> (<code>soft</code> /
+        <code>hard</code> / <code>crash</code>) and <strong>magnitude</strong> (within the
+        original's measured spread and OCR tolerance). Values not measured under the aligned start
+        are explicitly marked as such.
+      </p>
+      <div class="table-wrap">
+      <table>
+        <tr>
+          <th>Scenario</th>
+          <th>Original (aligned start, Ruffle + OCR)</th>
+          <th>Hand-built reference (aligned start)</th>
+          <th>AI-only rebuild (aligned start)</th>
+          <th>Two-level &amp; strict verdict (original vs. hand-built)</th>
+        </tr>
+        <tr>
+          <td><code>free-fall</code></td>
+          <td>12.7 m/s, <code>crash</code> (3/3 runs)</td>
+          <td>12.7 m/s, <code>crashLanded</code></td>
+          <td><em>Not measured with aligned start</em><br/><span style="color:#555;font-size:0.85em;">(unaligned 3-run baseline: 12.7 m/s, <code>crashLanded (destroyed)</code>)</span></td>
+          <td>
+            Category: <span class="matches">MATCH</span><br/>
+            Magnitude: <span class="matches">MATCH</span><br/>
+            Strict verdict: <span class="matches">PASS</span>
+          </td>
+        </tr>
+        <tr>
+          <td><code>crash-tilt</code></td>
+          <td>12.7 m/s, <code>crash</code> (3/3 runs)</td>
+          <td>12.7 m/s, <code>crashLanded</code></td>
+          <td><em>Not measured with aligned start</em><br/><span style="color:#555;font-size:0.85em;">(unaligned 3-run baseline: 12.7 m/s, <code>crashLanded (destroyed)</code>)</span></td>
+          <td>
+            Category: <span class="matches">MATCH</span><br/>
+            Magnitude: <span class="matches">MATCH</span><br/>
+            Strict verdict: <span class="matches">PASS</span>
+          </td>
+        </tr>
+        <tr>
+          <td><code>soft-landing</code></td>
+          <td>0.5–1.1 m/s, <code>soft</code><br/><span style="color:#555;font-size:0.85em;">(<code>verify.mjs</code>: 0.5, 1.0 m/s + 1 unreadable; <code>three-way-aligned</code>: 1.0, 0.7, 1.1 m/s)</span></td>
+          <td>0.23 m/s, <code>softLanded</code></td>
+          <td><em>Landing speed &amp; category not measured in aligned run</em><br/><span style="color:#555;font-size:0.85em;">(aligned time-series logged alt/thrust/range/fuel only, reaching 0 m by t=12000ms with 782.8 kg fuel; unaligned 3-run baseline: 4.5–4.6 m/s, <code>hardLanded</code>)</span></td>
+          <td>
+            Category: <span class="matches">MATCH</span><br/>
+            Magnitude: <span class="diverges">DIVERGES</span> (0.5–1.1 vs. 0.23 m/s)<br/>
+            Strict verdict: <span class="diverges">FAIL</span>
+          </td>
+        </tr>
+      </table>
+      </div>
+      <p class="note">
+        The AI-only rebuild loads and plays with zero console errors in all 3 scenarios, and
+        matches the hand-built reference on 2 of 3 in the earlier unaligned comparison
+        (<code>free-fall</code>, <code>crash-tilt</code>). On <code>soft-landing</code>, the
+        unaligned comparison diverged (hand-built 1.08 m/s <code>softLanded</code> vs. AI-only
+        4.5–4.6 m/s <code>hardLanded</code>). <strong>Root cause, confirmed by logging
+        thrust/altitude over time in both rebuilds:</strong> not input handling (both register all
+        7 Up-arrow presses identically, reaching full thrust at the same wall-clock time) and not a
+        physics-formula bug (an idealized, browser-free simulation of both <code>physics.js</code>
+        files lands at nearly the same speed, ~1.83 m/s, both <code>softLanded</code>) - it's a
+        synchronization gap for an auto-starting app (the hand-built rebuild's clock starts on
+        Start-button click; the AI-only rebuild auto-starts during page load). Even with a tighter
+        <code>vy-value</code> polling alignment, AI-only still showed a smaller residual head start
+        (~37 m vs. ~40.5 m at t=3500ms, left as a known open gap). Separately, a multi-round
+        investigation into how the REAL original behaves on <code>soft-landing</code> uncovered and
+        fixed three harness bugs (accidental PASS, unaligned click-settle delay, and OCR blocking
+        the real-time key loop): with those fixed, <strong>the original DOES land softly across
+        repeated runs</strong> (0.5–1.1 m/s) - matching the hand-built reference's outcome
+        category (<code>soft</code>), though the exact magnitude still diverges (original
+        0.5–1.1 m/s vs. hand-built 0.23 m/s) by more than measurement noise alone explains, so the
+        strict verdict remains <code>FAIL</code> and the root cause (starting at t=3800ms when thrust
+        engages) is documented as open rather than tuned away. Full numbers and account:
+        <a href="../docs/verifier-report.html#ai-only" target="_blank">verifier report, "Hand-built
+        reference vs. AI-only rebuild"</a>, <a href="../docs/verifier-report.html#noise-floor" target="_blank">"Measurement noise floor"</a>, and <code>docs/KIRO_NOTES.md</code>.
+      </p>
+    </div>
+  </details>
 
-  <footer style="margin-top:3em;color:#777;font-size:0.85em;">
-    Generated from cached pipeline/verifier output - see <code>docs/KIRO_NOTES.md</code> for
-    the full development record, including this verifier's own measured blind spots.
-  </footer>
+  <details class="section" data-lazy>
+    <summary>Verifier report (real scripted scenarios, mutation test, noise floor)</summary>
+    <div class="body">
+      <p>
+        Real scripted scenarios, run (by the project author, locally, with their own copy of
+        the original file) against the actual original - via a self-hosted Ruffle build, read
+        through OCR - and the rebuild (read through its own debug state), with the honest
+        result - including where OCR or timing made a comparison impossible, and a mutation
+        test measuring what the verifier can and can't catch.
+        <span class="fallback-link"><a href="../docs/verifier-report.html" target="_blank">Open full report in a new tab</a></span>
+      </p>
+      <p class="note">
+        This report (and this whole public page) contains <strong>no screenshots or any other
+        render of the original .swf</strong> - only numbers/text derived from runs performed
+        locally. The original's license status is not yet fully confirmed (see
+        <code>samples/SOURCES.md</code>), so no image of it is included here, by the same
+        precaution that keeps the file itself out of this repository.
+      </p>
+      <iframe id="report-frame" data-src="../docs/verifier-report.html" title="Verifier report"></iframe>
+    </div>
+  </details>
+
+  <details class="section">
+    <summary>BehaviorSpec, rules and assumptions <span class="count-badge" id="spec-counts"></span></summary>
+    <div class="body">
+      <p class="note">
+        This is the Analyzer/Rewriter PIPELINE's own fresh-session output
+        (<code>src/rewrite/fresh-session-2026-11-16/</code>) - a separate test of the automated
+        conversion stages, run in an isolated context with no access to the hand-built game
+        above. It is <strong>not</strong> what produced the playable rebuild - that one was
+        built directly in-session, documented in <code>docs/KIRO_NOTES.md</code>. Shown here
+        because this is the version of the BehaviorSpec contract that actually has an
+        <code>assumptions</code> field: every gap the source left unspecified that the pipeline
+        had to fill with a concrete choice, recorded instead of hidden in a comment.
+      </p>
+      <div id="spec-root">Loading BehaviorSpec…</div>
+    </div>
+  </details>
+
+  <details class="section">
+    <summary>Strings: recovered vs. supplied</summary>
+    <div class="body">
+      <p>
+        Every user-visible string in the hand-built rebuild, with its real provenance kept per
+        entry: <span class="pill pill-recovered">recovered</span> text was compiled into the
+        original <code>.swf</code> and extracted verbatim (FFDec <code>-export text</code>);
+        <span class="pill pill-supplied">supplied</span> text is original English written for
+        this rebuild because the SWF's own lookup for that string fails at runtime (a real bug
+        in the original - see <code>src/rewrite/reference/strings-report.md</code>) and has no
+        working fallback.
+      </p>
+      <div id="strings-root">Loading strings…</div>
+    </div>
+  </details>
+
+  <details class="section">
+    <summary>About this page and development log</summary>
+    <div class="body">
+      <p>
+        A decompiled Flash/AS2 simulation (PhET's Lunar Lander), rebuilt as editable HTML5/JS,
+        with a measured (not claimed) equivalence check against the original. Everything on
+        this page is read from already-generated, cached files - no API key, no live LLM call,
+        no network request other than this page's own same-origin files.
+      </p>
+      <p>
+        Generated from cached pipeline/verifier output - see <code>docs/KIRO_NOTES.md</code> for
+        the full development record, including this verifier's own measured blind spots.
+      </p>
+    </div>
+  </details>
 
 <script type="module">
 async function loadJSON(url) {
@@ -227,6 +313,19 @@ async function loadJSON(url) {
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+
+// Iframes inside collapsed sections are loaded only when the section is first opened.
+// This matters for the AI-only rebuild, which auto-starts on load: loaded while hidden,
+// it would already have crashed by the time anyone opened the section.
+document.querySelectorAll('details[data-lazy]').forEach((d) => {
+  d.addEventListener('toggle', () => {
+    if (!d.open) return;
+    d.querySelectorAll('iframe[data-src]').forEach((f) => {
+      f.src = f.dataset.src;
+      f.removeAttribute('data-src');
+    });
+  });
+});
 
 async function renderBehaviorSpec() {
   const root = document.getElementById('spec-root');
@@ -253,15 +352,15 @@ async function renderBehaviorSpec() {
       <h3>${esc(spec.title)}</h3>
       <details open>
         <summary><strong>Assumptions made while REWRITING this spec into code (${rewriterAssumptions.length})</strong> - every gap the BehaviorSpec left unspecified that the Rewriter had to fill with a concrete choice, recorded instead of hidden in a code comment. (Note: the BehaviorSpec's OWN <code>assumptions</code> field - for gaps the Analyzer itself had to resolve - is empty here; the Analyzer preferred leaving things as open "notes" below instead. The 14 below are the Rewriter's, a separate file.)</summary>
-        <table><tr><th>What was unspecified</th><th>Choice made</th><th>Citation</th></tr>${rewriterAssumptionRows}</table>
+        <div class="table-wrap"><table><tr><th>What was unspecified</th><th>Choice made</th><th>Citation</th></tr>${rewriterAssumptionRows}</table></div>
       </details>
       <details>
         <summary><strong>Literal strings (${spec.literalStrings.length})</strong> - quoted verbatim from the source</summary>
-        <table><tr><th>Source name</th><th>Literal text</th><th>Citation</th></tr>${literalRows}</table>
+        <div class="table-wrap"><table><tr><th>Source name</th><th>Literal text</th><th>Citation</th></tr>${literalRows}</table></div>
       </details>
       <details>
         <summary><strong>Rules (${spec.rules.length})</strong></summary>
-        <table><tr><th>Rule</th><th>Citation</th></tr>${rulesRows}</table>
+        <div class="table-wrap"><table><tr><th>Rule</th><th>Citation</th></tr>${rulesRows}</table></div>
       </details>
       <details>
         <summary><strong>Open notes (${spec.notes.length})</strong> - things the Analyzer could not verify</summary>
@@ -292,10 +391,10 @@ async function renderStrings() {
 
     root.innerHTML = `
       <p><strong>${recovered.length}</strong> recovered, <strong>${supplied.length}</strong> supplied, out of ${entries.length} total.</p>
-      <table>
+      <div class="table-wrap"><table>
         <tr><th>Key</th><th>Text</th><th>Provenance</th><th>Note</th></tr>
         ${entries.map(row).join('')}
-      </table>
+      </table></div>
     `;
   } catch (err) {
     root.innerHTML = `<p style="color:#b31d1d;">Could not load strings.json: ${esc(err.message)}. This page must be served over HTTP (see web/serve.mjs), not opened as a file:// URL.</p>`;
