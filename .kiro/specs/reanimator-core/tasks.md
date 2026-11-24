@@ -2,10 +2,26 @@
 
 ## Phase 0: Feasibility spike (go/no-go)
 - [ ] 0.1 Choose 2 openly licensed AS2 SWFs; record author, license, URL in samples/SOURCES.md (Req 9)
-- [ ] 0.2 Export scripts and assets with FFDec CLI; confirm readable output (Req 2)
-- [ ] 0.3 Play each SWF with self-hosted Ruffle in a Playwright page and capture a screenshot (Req 5)
-- [ ] 0.4 Have an LLM translate ONE simple SWF to HTML5/JS; judge by eye whether it resembles the original (Req 4)
+      STATUS: NOT done. Lunar Lander is AS2-confirmed and CC BY 3.0-eligible but still
+      "candidate only" (samples/SOURCES.md) pending the PhET Option A/B email. No second
+      sample found (Wave on a String dropped, unconfirmed). Zero samples committed yet.
+- [x] 0.2 Export scripts and assets with FFDec CLI; confirm readable output (Req 2)
+      DONE on lunar-lander.swf: scripts, text, and full XFL (shapes+placement matrices)
+      exported and parsed. See docs/KIRO_NOTES.md and work/lunar-lander/.
+- [x] 0.3 Play each SWF with self-hosted Ruffle in a Playwright page and capture a screenshot (Req 5)
+      DONE, exceeded: determinism measured (5 runs), a real Ruffle input bug found and
+      fixed (needs a focus click before buttons respond), OCR calibrated to read its gauges.
+- [x] 0.4 Have an LLM translate ONE simple SWF to HTML5/JS; judge by eye whether it resembles the original (Req 4)
+      DONE, exceeded the "judge by eye" bar: built 3 stages (scene, physics+controls,
+      landing/crash/score/pause/reset) with 38 unit tests and a real 5-run comparison
+      against the original. CAVEAT: the translation was done directly by this agent in
+      the session, not via an automated LlmProvider pipeline call - equivalent in spirit,
+      but worth naming explicitly for the write-up (see chat answer).
 - [ ] 0.5 Decision: GO if 0.2 to 0.4 work for at least one sample; otherwise change idea
+      NOT recorded. 0.2-0.4 all worked, well past the minimum bar - recommendation is GO
+      on technical feasibility. The decision is explicitly not just technical though: it
+      also depends on resolving 0.1's license gap before any public demo, which is a
+      product/legal call for the project owner, not something to tick off silently here.
 
 ## Phase 1: Foundation
 - [ ] 1.1 Project setup: TypeScript, Vitest, fast-check, Playwright, lint (all reqs)
