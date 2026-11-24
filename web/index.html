@@ -17,6 +17,13 @@
   iframe { width: 100%; border: 1px solid #ccc; border-radius: 4px; }
   #game-frame { height: 660px; }
   #report-frame { height: 480px; }
+  .rebuild-columns { display: flex; gap: 18px; flex-wrap: wrap; }
+  .rebuild-column { flex: 1 1 440px; min-width: 320px; }
+  .rebuild-column h3 { margin-bottom: 2px; }
+  .rebuild-column iframe { height: 460px; }
+  .rebuild-caption { font-size: 0.85em; color: #555; margin-top: 4px; }
+  .diverges { color: #b31d1d; font-weight: 600; }
+  .matches { color: #1a7f37; font-weight: 600; }
   table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 0.9em; }
   th, td { border: 1px solid #ccc; padding: 5px 9px; text-align: left; vertical-align: top; }
   th { background: #f3f3f3; }
@@ -58,12 +65,69 @@
 
   <h2>Play the rebuild</h2>
   <p>
-    Hand-built HTML5/JS reconstruction (<code>src/rewrite/reference/lunar-lander/</code>),
-    citation-linked line-by-line to the decompiled source, 38 unit tests, and verified
-    against the real original below. Arrow keys rotate/thrust, Space toggles full thrust,
-    R resets. Click Start to begin.
+    Two independent rebuilds of the same decompiled source, run through the SAME 3 scripted
+    verifier scenarios, side by side. Neither was tuned to make this comparison look better -
+    the AI-only rebuild in particular was run exactly as the Rewriter stage produced it.
   </p>
-  <iframe id="game-frame" src="../src/rewrite/reference/lunar-lander/index.html" title="Lunar Lander rebuild"></iframe>
+
+  <div class="rebuild-columns">
+    <div class="rebuild-column">
+      <h3>Hand-built reference</h3>
+      <p class="rebuild-caption">
+        Written directly against the decompiled source, citation-linked line-by-line, 38 unit
+        tests (<code>src/rewrite/reference/lunar-lander/</code>). Arrow keys rotate/thrust,
+        Space toggles full thrust, R resets. Click Start to begin.
+      </p>
+      <iframe id="game-frame" src="../src/rewrite/reference/lunar-lander/index.html" title="Hand-built Lunar Lander rebuild"></iframe>
+    </div>
+    <div class="rebuild-column">
+      <h3>AI-only rebuild (unmodified)</h3>
+      <p class="rebuild-caption">
+        Produced by the Analyzer/Rewriter pipeline in an isolated test session, with NO access
+        to the hand-built code above (<code>src/rewrite/fresh-session-2026-11-16/rewriter-output/</code>).
+        Shown exactly as generated - no bug fixes, no timing tuning. Starts automatically (its
+        own Rewriter's documented assumption - nothing in the source said what should trigger
+        the start); same controls otherwise.
+      </p>
+      <iframe id="ai-game-frame" src="../src/rewrite/fresh-session-2026-11-16/rewriter-output/index.html" title="AI-only Lunar Lander rebuild"></iframe>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.6em;">Same 3 scripted scenarios, both rebuilds</h3>
+  <table>
+    <tr><th>Scenario</th><th>Hand-built reference</th><th>AI-only rebuild (3 repeated runs)</th><th>Outcome</th></tr>
+    <tr>
+      <td>free-fall</td>
+      <td>12.69 m/s, <code>crashLanded</code></td>
+      <td>12.7 m/s, <code>crashLanded</code> (destroyed) - 12.7, 12.7, 12.7</td>
+      <td class="matches">match</td>
+    </tr>
+    <tr>
+      <td>crash-tilt</td>
+      <td>12.68 m/s, <code>crashLanded</code></td>
+      <td>12.7 m/s, <code>crashLanded</code> (destroyed) - 12.7, 12.7, 12.7</td>
+      <td class="matches">match</td>
+    </tr>
+    <tr>
+      <td>soft-landing</td>
+      <td>1.08 m/s, <code>softLanded</code></td>
+      <td>4.5 m/s, <code>hardLanded</code> - 4.5, 4.5, 4.6</td>
+      <td class="diverges">DIVERGES</td>
+    </tr>
+  </table>
+  <p class="note">
+    The AI-only rebuild loads and plays with zero console errors in all 3 scenarios, and
+    matches the hand-built reference on 2 of 3. <code>soft-landing</code> diverges
+    consistently (3/3 runs, not a fluke): checked whether this is a real formula bug by running
+    both <code>physics.js</code> files directly in Node with an idealized fixed-tick simulation
+    (no browser) - both land at nearly the same speed (~1.83 m/s, both softLanded), so the
+    formulas themselves are equivalent for this scenario. The divergence only shows up with a
+    real browser actually running the app, so it is a real-world TIMING effect specific to how
+    each app's loop behaves under real scheduling - not fully root-caused, reported as a real,
+    repeatable, open finding rather than a confirmed diagnosis. Full numbers:
+    <a href="../docs/verifier-report.html#ai-only" target="_blank">verifier report, "Hand-built
+    reference vs. AI-only rebuild"</a>.
+  </p>
 
   <h2>Verifier report</h2>
   <p>

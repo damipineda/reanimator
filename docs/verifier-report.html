@@ -161,6 +161,63 @@
     </p>
   </section>
 
+  <h2 id="ai-only">Hand-built reference vs. AI-only rebuild</h2>
+  <p>
+    The hand-built reference above was written directly against the decompiled source. The
+    pipeline's own Analyzer/Rewriter stages were separately tested, in an isolated session with
+    no access to the hand-built code, producing an independent reconstruction
+    (<code>src/rewrite/fresh-session-2026-11-16/rewriter-output/</code>). This section runs the
+    SAME 3 scenarios against that AI-only rebuild, unmodified, and compares its measured
+    outcome to the hand-built reference's.
+  </p>
+  
+    <table>
+      <tr><th>Scenario</th><th>Hand-built reference</th><th>AI-only rebuild (unmodified)</th><th>Outcome category</th></tr>
+      
+      <tr>
+        <td>crash-tilt</td>
+        <td>12.677 m/s, <code>crashLanded</code></td>
+        <td>12.7 m/s, <code>crashLanded (destroyed)</code> (3 runs: 12.7, 12.7, 12.7 m/s)</td>
+        <td style="color:#1a7f37;font-weight:600;">match</td>
+      </tr>
+      <tr>
+        <td>free-fall</td>
+        <td>12.688 m/s, <code>crashLanded</code></td>
+        <td>12.7 m/s, <code>crashLanded (destroyed)</code> (3 runs: 12.7, 12.7, 12.7 m/s)</td>
+        <td style="color:#1a7f37;font-weight:600;">match</td>
+      </tr>
+      <tr>
+        <td>soft-landing</td>
+        <td>1.082 m/s, <code>softLanded</code></td>
+        <td>4.5 m/s, <code>hardLanded</code> (3 runs: 4.5, 4.5, 4.5 m/s)</td>
+        <td style="color:#b31d1d;font-weight:600;">DIVERGES</td>
+      </tr>
+    </table>
+    <p class="note">
+      The AI-only rebuild <strong>loads and plays with zero console errors</strong> in all 3
+      scenarios, and matches the hand-built reference's outcome category on 2 of 3
+      (<code>free-fall</code>, <code>crash-tilt</code>) - both land at the SWF's own displayed
+      precision, 12.7 m/s. <code>soft-landing</code> diverges: the hand-built reference lands
+      softly (~1.0 m/s) on the exact same scripted thrust-burst timeline; the AI-only rebuild
+      consistently lands at 4.5-4.6 m/s (<code>hardLanded</code>), across 3 repeated real-browser
+      runs - not a one-off fluke. Checked whether this is a genuine formula difference: running
+      both implementations' <code>physics.js</code> directly in Node with an idealized, fixed
+      40ms tick (no browser, no real-timing variance) gives nearly IDENTICAL landing speeds for
+      both (~1.83 m/s, both <code>softLanded</code>) - so the two implementations are not
+      structurally different for this scenario. The divergence only appears with a real browser
+      actually running the app, meaning it is a real-world TIMING effect specific to how each
+      app's own render/physics loop behaves under real scheduling, not a formula bug - a
+      plausible but UNCONFIRMED candidate is the AI-only rebuild's render loop doing more
+      per-frame DOM work (<code>requestAnimationFrame</code> rebuilding a landing-marks layer
+      every frame) that could coarsen its physics tick's effective <code>dt</code> resolution
+      under load, which would make a tightly-timed "suicide burn" scenario land harder than
+      intended - reported as a real, repeatable, UNEXPLAINED-IN-FULL finding, not as a confirmed
+      diagnosis. Per the task that produced this comparison, the AI-only rebuild was run exactly
+      as the Rewriter produced it - not tuned, not fixed, not given special timing margin the
+      way <code>soft-landing.json</code>'s own burn was tuned for the hand-built reference.
+      
+    </p>
+
   <h2>Assumptions (Rewriter stage)</h2>
   <p>
     Every gap the BehaviorSpec left unspecified that the fresh-session Rewriter had to fill with

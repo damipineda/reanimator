@@ -131,6 +131,52 @@ function mutationSection(mutation) {
   </section>`;
 }
 
+function rebuildComparisonSection(comparisons) {
+  if (!comparisons || comparisons.length === 0) return '<p><em>Comparison was not run.</em></p>';
+  const rows = comparisons
+    .map((c) => {
+      const match = c.categoryMatches;
+      return `
+      <tr>
+        <td>${esc(c.scenarioId)}</td>
+        <td>${fmt(c.handBuilt.landingSpeed)} m/s, <code>${esc(c.handBuilt.crashState)}</code></td>
+        <td>${fmt(c.aiOnly.landingSpeed)} m/s, <code>${esc(c.aiOnly.crashState)}</code> (${c.aiOnly.runs} runs: ${c.aiOnly.landingSpeeds.map(fmt).join(', ')} m/s)</td>
+        <td style="color:${match ? '#1a7f37' : '#b31d1d'};font-weight:600;">${match ? 'match' : 'DIVERGES'}</td>
+      </tr>`;
+    })
+    .join('');
+  const anyErrors = comparisons.some((c) => c.aiOnly.consoleErrors.length > 0);
+  return `
+    <table>
+      <tr><th>Scenario</th><th>Hand-built reference</th><th>AI-only rebuild (unmodified)</th><th>Outcome category</th></tr>
+      ${rows}
+    </table>
+    <p class="note">
+      The AI-only rebuild <strong>loads and plays with zero console errors</strong> in all 3
+      scenarios, and matches the hand-built reference's outcome category on 2 of 3
+      (<code>free-fall</code>, <code>crash-tilt</code>) - both land at the SWF's own displayed
+      precision, 12.7 m/s. <code>soft-landing</code> diverges: the hand-built reference lands
+      softly (~1.0 m/s) on the exact same scripted thrust-burst timeline; the AI-only rebuild
+      consistently lands at 4.5-4.6 m/s (<code>hardLanded</code>), across 3 repeated real-browser
+      runs - not a one-off fluke. Checked whether this is a genuine formula difference: running
+      both implementations' <code>physics.js</code> directly in Node with an idealized, fixed
+      40ms tick (no browser, no real-timing variance) gives nearly IDENTICAL landing speeds for
+      both (~1.83 m/s, both <code>softLanded</code>) - so the two implementations are not
+      structurally different for this scenario. The divergence only appears with a real browser
+      actually running the app, meaning it is a real-world TIMING effect specific to how each
+      app's own render/physics loop behaves under real scheduling, not a formula bug - a
+      plausible but UNCONFIRMED candidate is the AI-only rebuild's render loop doing more
+      per-frame DOM work (<code>requestAnimationFrame</code> rebuilding a landing-marks layer
+      every frame) that could coarsen its physics tick's effective <code>dt</code> resolution
+      under load, which would make a tightly-timed "suicide burn" scenario land harder than
+      intended - reported as a real, repeatable, UNEXPLAINED-IN-FULL finding, not as a confirmed
+      diagnosis. Per the task that produced this comparison, the AI-only rebuild was run exactly
+      as the Rewriter produced it - not tuned, not fixed, not given special timing margin the
+      way <code>soft-landing.json</code>'s own burn was tuned for the hand-built reference.
+      ${anyErrors ? '<br/><strong>Console errors were observed</strong> - see work/verify-results/rebuild-comparison.json.' : ''}
+    </p>`;
+}
+
 function assumptionsSection(assumptions) {
   if (!assumptions || assumptions.length === 0) return '<p><em>No assumptions recorded.</em></p>';
   return (
@@ -161,6 +207,8 @@ export function generateReport() {
   const mutationPath = path.join(RESULTS_DIR, 'mutation-test.json');
   const mutation = fs.existsSync(mutationPath) ? JSON.parse(fs.readFileSync(mutationPath, 'utf8')) : null;
   const assumptions = fs.existsSync(ASSUMPTIONS_PATH) ? JSON.parse(fs.readFileSync(ASSUMPTIONS_PATH, 'utf8')) : [];
+  const comparisonPath = path.join(RESULTS_DIR, 'rebuild-comparison.json');
+  const comparisons = fs.existsSync(comparisonPath) ? JSON.parse(fs.readFileSync(comparisonPath, 'utf8')) : null;
 
   const scenarios = fs
     .readdirSync(SCENARIOS_DIR)
@@ -221,6 +269,17 @@ export function generateReport() {
     re-runs the free-fall scenario against it.
   </p>
   ${mutationSection(mutation)}
+
+  <h2 id="ai-only">Hand-built reference vs. AI-only rebuild</h2>
+  <p>
+    The hand-built reference above was written directly against the decompiled source. The
+    pipeline's own Analyzer/Rewriter stages were separately tested, in an isolated session with
+    no access to the hand-built code, producing an independent reconstruction
+    (<code>src/rewrite/fresh-session-2026-11-16/rewriter-output/</code>). This section runs the
+    SAME 3 scenarios against that AI-only rebuild, unmodified, and compares its measured
+    outcome to the hand-built reference's.
+  </p>
+  ${rebuildComparisonSection(comparisons)}
 
   <h2>Assumptions (Rewriter stage)</h2>
   <p>

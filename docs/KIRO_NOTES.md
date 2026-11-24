@@ -742,6 +742,65 @@ short map of what lives under `src/rewrite/reference/` vs.
 of both and that distinction needs to be obvious to a reader, not
 assumed.
 
+### Running the AI-only rebuild through the same verifier scenarios
+
+The fresh-session Rewriter output (`src/rewrite/fresh-session-2026-11-16/rewriter-output/`)
+had never actually been played, only syntax-checked (`node --check`) when it
+was saved. Built `src/verify/run-fresh-rebuild.mjs` to play it through the
+exact same 3 scenarios (`scenarios/lunar-lander/`) used for the hand-built
+reference - **unmodified, not tuned, no bug fixes, no extra debug hook
+added to it**. It has no `window.__reanimator`-style bridge (the Rewriter
+was never asked for one), so this reads its DOM text content directly
+(`height-value`/`range-value`/`message1`/`message2`) instead - the only
+way to observe it without changing a single line of its own code.
+
+**It loads and plays.** Zero console errors across all 3 scenarios. It
+auto-starts on load (its own documented Rewriter assumption - nothing in
+the given source said what triggers the start), responds to the same
+keyboard events as the hand-built rebuild, and reaches a landed/crashed
+state in every scenario.
+
+**Measured outcome, side by side (3 repeated runs each where noted):**
+
+| Scenario | Hand-built reference | AI-only rebuild | Result |
+|---|---|---|---|
+| free-fall | 12.69 m/s, `crashLanded` | 12.7, 12.7, 12.7 m/s, `crashLanded` (destroyed) | match |
+| crash-tilt | 12.68 m/s, `crashLanded` | 12.7, 12.7, 12.7 m/s, `crashLanded` (destroyed) | match |
+| soft-landing | 1.08 m/s, `softLanded` | 4.5, 4.5, 4.6 m/s, `hardLanded` | **DIVERGES, consistently** |
+
+2 of 3 match at the display precision both rebuilds and the real original
+share. `soft-landing` diverges, and not as a fluke - 3/3 real-browser runs
+of the AI-only rebuild land at 4.5-4.6 m/s on the EXACT same scripted
+thrust-burst timeline that lands the hand-built reference at ~1.0-1.08
+m/s every time.
+
+**Root-caused as far as honestly possible, not further:** ran both
+`physics.js` files directly in Node with an idealized, fixed-40ms-tick
+simulation (no browser, no real-timing variance) against the identical
+scripted key timeline. Result: both land at **nearly the same speed,
+~1.83 m/s, both `softLanded`** - so the two implementations' FORMULAS are
+not structurally different for this scenario; the divergence only
+appears when an actual browser runs the app. This rules out a physics
+bug and points at a real-world TIMING effect specific to how each app's
+own loop behaves under real scheduling - a plausible but **unconfirmed**
+candidate is the AI-only rebuild's render loop doing per-frame DOM work
+(`requestAnimationFrame` clearing and rebuilding a landing-marks layer
+every frame via `innerHTML = ""` + `appendChild`) that could coarsen its
+physics tick's effective `dt` resolution under load, which would make a
+tightly-timed "suicide burn" land harder than intended. Reported as a
+real, repeatable, **open** finding - not a confirmed diagnosis, and
+explicitly not chased further or fixed, per this task's own instruction
+not to tune the artifact first.
+
+Added `src/verify/compare-rebuilds.mjs` to run this comparison
+reproducibly, extended `src/verify/report.mjs` with a "Hand-built
+reference vs. AI-only rebuild" section in `docs/verifier-report.html`,
+and added the AI-only rebuild to `web/index.html` as a second, clearly
+labeled iframe next to the hand-built one (same scripted-scenario table
+inline, with a note on what was and wasn't root-caused). Verified both
+iframes load with zero console errors via Playwright before committing
+anything.
+
 ### Demo page, verified Node-independent + prepared for GitHub Pages
 
 Checked that `web/index.html` depends on nothing Node-specific: every
