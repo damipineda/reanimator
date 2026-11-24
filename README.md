@@ -17,12 +17,17 @@ full stack.
 
 ## The sample this repo is built against: PhET's Lunar Lander
 
-This repo does **not** include `lunar-lander.swf`. Its provenance (a
-community upload to the Internet Archive, not an official PhET copy) and
-exact license path are not fully confirmed - see `samples/SOURCES.md` for
-the full reasoning and the current decision. The repo and pipeline are
-designed to run without this file present; you need to provide your own copy
-to actually exercise the pipeline against it:
+This repo does **not** include, and will never commit, `lunar-lander.swf`
+(or any screenshot/render of it - see the public demo page section below).
+Its provenance (a community upload to the Internet Archive, not an
+official PhET copy) and exact license path are not fully confirmed - see
+`samples/SOURCES.md` for the full reasoning and the current decision.
+
+**You only need this file for LOCAL runs** of the full verifier
+(`src/verify/verify.mjs`) or the extraction/analysis pipeline against a
+real `.swf`. The committed repo, its tests, and its public demo page all
+work fully without it - get your own copy only if you want to reproduce
+those specific local-only steps yourself:
 
 1. Download it yourself:
    `https://archive.org/download/flash_lunar-lander/lunar-lander.swf`
@@ -31,9 +36,11 @@ to actually exercise the pipeline against it:
    different, unverified file).
 2. Place it at `local-samples/lunar-lander.swf` (gitignored - this path is
    intentionally outside `samples/`, which only holds files whose license has
-   actually cleared the promotion rule in `samples/SOURCES.md`).
+   actually cleared the promotion rule in `samples/SOURCES.md`, and outside
+   anything this repo would ever publish via GitHub Pages).
 3. Run the pipeline/tests pointed at that local path (see
-   `docs/KIRO_NOTES.md` for the exact commands used during development).
+   `docs/KIRO_NOTES.md` for the exact commands used during development, and
+   "Running the full verifier" below).
 
 ## Run the tests
 ```
@@ -45,19 +52,38 @@ network access. `vitest.config.mjs` excludes `work/` and `local-samples/`
 from test discovery on purpose.
 
 ## View the demo page (no API key, no live LLM call, no original SWF needed)
+The whole demo (`web/index.html`) is plain static files using only
+relative paths and `fetch()`/`<iframe>` - it needs to be served over HTTP
+(not opened as a `file://` URL), but **any** static file server works,
+not just this repo's own `web/serve.mjs`. For example, from the repo root:
 ```
-node web/serve.mjs
+node web/serve.mjs                 # this repo's own minimal server, no extra install
+# or, with nothing from this repo installed at all:
+python -m http.server 8100
+npx serve .
 ```
-then open `http://localhost:8099/web/index.html`. Shows the rebuilt game
+then open `http://localhost:<port>/web/index.html`. Shows the rebuilt game
 (playable), the already-generated verifier report, the BehaviorSpec with
 its recorded assumptions, the recovered-vs-supplied string table, and the
 required PhET attribution/modification notice. Everything on that page is
 read from files already committed in this repo - it does not touch
-`local-samples/` or call any LLM.
+`local-samples/`, call any LLM, or embed any screenshot/render of the
+original `.swf` (see the attribution block on the page itself for why).
 
-You can also open `docs/verifier-report.html` directly (same requirement:
-served over HTTP, not opened as a `file://` URL, since it fetches nothing
-itself but the demo page embedding it does).
+You can also open `docs/verifier-report.html` directly, served the same
+way (served over HTTP; it fetches nothing itself, but the demo page
+embedding it does, so the whole repo root needs to be reachable).
+
+### Publishing the demo via GitHub Pages
+`.github/workflows/pages.yml` publishes the repository as-is (no build
+step) on every push to `main`. To enable it: **Settings -> Pages ->
+Source: GitHub Actions**. The public URL will be
+`https://<you>.github.io/<repo>/web/index.html`. Because Pages serves the
+whole repo root (not a `/docs`-only subset), `web/index.html`'s relative
+links to `src/`, `scenarios/`, and `docs/verifier-report.html` all resolve
+the same way they do locally. `local-samples/` and `work/` are gitignored,
+so they are never part of what gets published - the original `.swf` and
+any render of it can't end up on the public site even by accident.
 
 ## Running the full verifier (optional, needs local-only assets)
 `src/verify/verify.mjs` drives the REAL original (via a self-hosted Ruffle

@@ -742,6 +742,53 @@ short map of what lives under `src/rewrite/reference/` vs.
 of both and that distinction needs to be obvious to a reader, not
 assumed.
 
+### Demo page, verified Node-independent + prepared for GitHub Pages
+
+Checked that `web/index.html` depends on nothing Node-specific: every
+link is a relative path (`fetch('../src/...')`, `<iframe src="../docs/...">`),
+no absolute `/...` paths, no reliance on `src/verify/static-server.mjs`
+beyond it being *one* convenient way to serve files locally. Proved this
+rather than assumed it: ran `python -m http.server 8100` from the repo
+root (a plain static server with zero Node/npm involvement) and drove the
+page with Playwright against it - same result as against the Node
+server (27 rules / 8 literal strings / 14 assumptions / 9 open notes, no
+console errors).
+
+Added `.nojekyll` (repo root) and `.github/workflows/pages.yml` (checkout
+-> `actions/upload-pages-artifact` -> `actions/deploy-pages`, no build
+step, matching the project's own "no build step" rule) so enabling
+**Settings -> Pages -> Source: GitHub Actions** publishes the repo as-is.
+Deliberately configured to serve the whole repo root, not a `/docs`-only
+subset, specifically so the SAME relative paths that work locally also
+work on the published site - a `/docs`-only Pages config would have
+required restructuring (or duplicating) everything `web/index.html`
+reaches into `src/`, `scenarios/`, which would have reintroduced exactly
+the kind of two-copies-that-can-drift risk the `strings.json` fix above
+was about avoiding.
+
+**Explicitly decided NOT to add any screenshot of the original `.swf` to
+the public demo**, even though it would make the "what did the original
+look like" story more complete visually. This project's own rule, set in
+Task 0.1 and re-applied consistently since ("a render of an unlicensed
+asset carries the same risk as the asset itself" - this file's Phase 0
+section), already means no such screenshot exists anywhere in this repo
+to begin with; generating and committing a NEW one now, just for the demo
+page, would be the first time this project knowingly committed a render
+of the still-license-unconfirmed sample, for a page that is about to be
+published publicly via GitHub Pages - the highest-exposure, least
+reversible place such a mistake could land. Added an explicit line to the
+demo page itself stating no such render is included and why, so the
+omission reads as a deliberate, stated decision instead of looking like
+an oversight.
+
+Re-confirmed the 3 pre-push safety checks requested this round, all
+already clean before any of this work: `git rev-list --objects --all`
+piped through `git cat-file --batch-check` (not just a commit-message
+grep, which would have given a false sense of certainty) finds zero
+`.swf` blobs across all of history; `.kiro/` is tracked
+(`git ls-files .kiro` lists real files) and `.gitignore` has no rule
+matching it; `LICENSE` (MIT) exists at the repo root and is tracked.
+
 ---
 
 ## Kiro Usage Patterns

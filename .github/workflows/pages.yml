@@ -1,0 +1,42 @@
+name: Deploy demo to GitHub Pages
+
+# Purely static deployment - no build step, nothing installed, matching
+# this project's own "no build step" rule (see .kiro/steering/tech.md and
+# src/prompts/rewriter.md's requirement #1). This just publishes the
+# checked-out repository as-is; web/index.html and everything it links to
+# (src/rewrite/reference/, docs/verifier-report.html, scenarios/) uses
+# only relative paths, so it works unmodified from the repo root whether
+# served by this, by any other static file server, or opened locally.
+#
+# Never includes local-samples/ or work/ - both are gitignored, so they
+# are simply not present in the checkout this workflow publishes. See
+# samples/SOURCES.md and docs/KIRO_NOTES.md for why the original .swf and
+# any render of it never leave the developer's own machine.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -65,11 +65,19 @@
 
   <h2>Verifier report</h2>
   <p>
-    Real scripted scenarios, run against the actual original (via a self-hosted Ruffle
-    build, read through OCR) and the rebuild (read through its own debug state), with the
-    honest result - including where OCR or timing made a comparison impossible, and a
-    mutation test measuring what the verifier can and can't catch.
+    Real scripted scenarios, run (by the project author, locally, with their own copy of
+    the original file) against the actual original - via a self-hosted Ruffle build, read
+    through OCR - and the rebuild (read through its own debug state), with the honest
+    result - including where OCR or timing made a comparison impossible, and a mutation
+    test measuring what the verifier can and can't catch.
     <span class="fallback-link"><a href="../docs/verifier-report.html" target="_blank">Open full report in a new tab</a></span>
+  </p>
+  <p class="note">
+    This report (and this whole public page) contains <strong>no screenshots or any other
+    render of the original .swf</strong> - only numbers/text derived from runs performed
+    locally. The original's license status is not yet fully confirmed (see
+    <code>samples/SOURCES.md</code>), so no image of it is included here, by the same
+    precaution that keeps the file itself out of this repository.
   </p>
   <iframe id="report-frame" src="../docs/verifier-report.html" title="Verifier report"></iframe>
 
