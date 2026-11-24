@@ -1,0 +1,17 @@
+{
+  "name": "reanimator",
+  "version": "0.1.0",
+  "description": "Convert ActionScript SWFs to HTML5/JS and verify equivalence",
+  "type": "module",
+  "scripts": {
+    "test": "vitest",
+    "task-0.3": "node src/tasks/task-0.3.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "pngjs": "^7.0.0",
+    "pixelmatch": "^5.3.0",
+    "vitest": "^1.0.0",
+    "fast-check": "^3.14.0"
+  }
+}

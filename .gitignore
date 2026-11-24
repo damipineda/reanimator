@@ -1,0 +1,27 @@
+node_modules/
+.env
+.env.local
+dist/
+build/
+*.log
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cache/
+coverage/
+
+# SWFs with no confirmed open license: kept on this machine only for
+# technical testing (FFDec/Ruffle/Playwright). Never committed. See
+# samples/SOURCES.md for status of each file and docs/KIRO_NOTES.md
+# for why this folder exists.
+local-samples/
+
+# Scratch/working directory: FFDec exports and Ruffle test harness
+# output, including renders/screenshots derived from files whose
+# license is not yet confirmed (see samples/SOURCES.md). Not part of
+# the structure.md layout; quantitative findings are written to
+# docs/KIRO_NOTES.md instead. Reusable harness code lives in src/.
+/work/
