@@ -1,333 +1,355 @@
 // src/physics.js
 //
-// Pure lander physics. Every exported function has the shape
-// (state, ...args) -> newState, or (state, ...args) -> { state, events }
-// when the original behavior also fires a one-shot sound/visual cue
-// (events are plain descriptors; nothing here plays a sound or touches the
-// DOM - that happens in main.js, which owns the impure SoundMaker stub).
-// No function in this file reads a clock itself; callers always pass in
-// the current time from src/clock.js's now(), per rewriter.md requirement
-// #4.
+// Pure (state, ...args) -> newState simulation logic (rewriter.md hard
+// requirement #3). No DOM access, no timers, no randomness, no direct
+// clock reads in here - callers (src/main.js) pass in dt/elapsed time
+// obtained from src/clock.js's now().
 //
-// Citations below point at the decompiled-source line ranges recorded in
-// src/rewrite/fresh-session-2026-11-16/behavior-spec.json ("rules" array).
+// Every rule implemented below cites the BehaviorSpec rule it comes from.
+// Every place a rule left a case unspecified has an "ASSUMPTION:" comment
+// and a matching entry in the final --- ASSUMPTIONS --- block.
 
-export const GRAVITY = 1.6; // Constants.g - Constants.as:3
-export const MAX_THRUST = 45000; // Lander.initialize() - Lander.as:42-64
-export const INITIAL_FUEL = 816.5;
-export const MASS_EMPTY = 6839;
-export const SPECIFIC_I = 3050;
-export const SOFT_LANDING_SPEED = 2;
-export const HARD_LANDING_SPEED = 6;
-export const DAMAGE_LANDING_SPEED = 12; // only used by the UI's crash-message split, see notes
-export const INIT_X = 45; // reset()/reInitialize(initX, initY) - DoAction.as:129-131; Lander.as:65-72
-export const INIT_Y = 50;
-export const ANGLE_STEP_RAD = 3 * (Math.PI / 180); // ±3deg per angleLeft/angleRight - Lander.as:233-260
-export const THRUST_STEP = 0.05 * MAX_THRUST; // increaseThrust/decreaseThrust - Lander.as:196-203
+// ---- Constants (BehaviorSpec "rules", Constants.as:3 / Lander.as:49-55) ----
+export const G = 1.6; // Constants.as:3
+export const MASS_EMPTY = 6839; // Lander.as:49-55
+export const INITIAL_FUEL = 816.5; // Lander.as:49-55
+export const MAX_THRUST = 45000; // Lander.as:49-55
+export const SPECIFIC_I = 3050; // Lander.as:49-55
+export const SOFT_LANDING_SPEED = 2; // Lander.as:56-58,95-121
+export const HARD_LANDING_SPEED = 6; // Lander.as:56-58,95-121
+export const DAMAGE_LANDING_SPEED = 12; // referenced in notes (damageLandingSpeed)
+export const ANGLE_LANDING_THRESHOLD = 0.2; // Lander.as:56-58,95-121
+export const ANGLE_STEP = (3 * Math.PI) / 180; // Lander.as:233-260
+export const THRUST_STEP = 0.05 * MAX_THRUST; // Lander.as:196-203
+export const LOW_FUEL_RATIO = 0.1; // Lander.as:176-195
+export const INIT_X = 45; // DoAction.as:338-357,139-142
+export const INIT_Y = 50; // DoAction.as:338-357,139-142
+export const PIX_PER_METER = 7; // DoAction.as:166-167,380
+export const RAD_TO_DEG = 180 / Math.PI; // DoAction.as:194-198 etc.
 
-function cosSin(angle) {
-  return { cosTheta: Math.cos(angle), sinTheta: Math.sin(angle) };
+// PLACEHOLDER, not a value given anywhere in the BehaviorSpec. The spec's
+// own notes say stage pixel dimensions were never recoverable from the
+// given source ("Actual values of stageW/stageH ... are not visible in the
+// given source"). Used only so the camera math below has *some* numbers to
+// work fractionally against; see the matching ASSUMPTIONS entry.
+export const STAGE_W = 800;
+export const STAGE_H = 600;
+
+function clamp(value, lo, hi) {
+  return Math.max(lo, Math.min(hi, value));
 }
 
-/**
- * Lander.initialize() / Lander.reInitialize(initX, initY) - Lander.as:42-72.
- * Produces a fresh lander physics state. Used both for the very first state
- * and for reset() (R key / reset button), since the BehaviorSpec says
- * reInitialize() just re-runs the same initialize() routine.
- */
-export function createInitialLanderState() {
-  const { cosTheta, sinTheta } = cosSin(0);
+// ---- Initialization / reset ----
+// "reset() ... re-initializes the lander at position (initX=45, initY=50)
+// with zero velocity via reInitialize() ... resets the zoom state (mag=1,
+// Nmag=0)." / "Lander.reInitialize(xInit, yInit) ... initialize() ...
+// resets angle ... fuel (to initialFuel), thrust (to 0), currentMass,
+// boulderCrash and the fuel-alarm-sounded flags."
+// (DoAction.as:338-357,139-142; Lander.as:42-72)
+export function createInitialState() {
   return {
     pos: { x: INIT_X, y: INIT_Y },
     velocity: { x: 0, y: 0 },
     acceleration: { x: 0, y: 0 },
     angle: 0,
-    cosTheta,
-    sinTheta,
     thrust: 0,
-    maxThrust: MAX_THRUST,
     remainingFuel: INITIAL_FUEL,
-    initialFuel: INITIAL_FUEL,
-    massEmpty: MASS_EMPTY,
     currentMass: MASS_EMPTY + INITIAL_FUEL,
-    specificI: SPECIFIC_I,
-    crashState: "inFlight",
+    crashState: 'inFlight',
     landingSpeed: undefined,
     boulderCrash: false,
-    fuelLowAlarmSounded: false,
-    fuelOutAlarmSounded: false,
-    inMotion: false,
-    t: 0,
-    lastT: 0,
+    motionPaused: false,
+    helpPlaqueVisible: false,
+    lowFuelAlarmed: false,
+    emptyFuelAlarmed: false,
+    mag: 1,
+    nmag: 0,
+    viewOffsetX: 0,
+    nbrLandings: 0,
+    score: 0,
+    nbrSoftLandings: 0,
+    nbrHardLandings: 0,
   };
 }
 
-/**
- * Lander.as:176-195 - fuel consumption for one tick. Runs before the
- * motion integration in stepLander() below; the BehaviorSpec does not spell
- * out the exact internal ordering of useFuel() vs. the position/velocity
- * integration inside evolveOneTimeStep(), only that both happen "each
- * tick", so this ordering (fuel first, using the thrust requested on the
- * *previous* tick, then motion using the resulting currentMass) is this
- * rewrite's best-effort reconstruction, not a verified instruction order.
- */
-function consumeFuel(state, dt) {
-  const events = [];
-
-  if (state.remainingFuel <= 0) {
-    // Already empty: thrust stays forced to 0 (Lander.as:176-195).
-    return { state: { ...state, thrust: 0 }, events };
-  }
-
-  let remainingFuel = state.remainingFuel - (state.thrust * dt) / state.specificI;
-  let thrust = state.thrust;
-  let fuelLowAlarmSounded = state.fuelLowAlarmSounded;
-  let fuelOutAlarmSounded = state.fuelOutAlarmSounded;
-
-  if (remainingFuel <= 0) {
-    remainingFuel = 0; // floor-clamped
-    thrust = 0; // forced to 0 if it would go negative
-    if (!fuelOutAlarmSounded) {
-      events.push({ type: "soundAlarm", variant: "outOfFuel" }); // soundAlarm(3)
-      fuelOutAlarmSounded = true;
-    }
-  } else if (!fuelLowAlarmSounded && remainingFuel / state.initialFuel < 0.1) {
-    events.push({ type: "soundAlarm", variant: "lowFuel" }); // soundAlarm(1)
-    fuelLowAlarmSounded = true;
-  }
-
-  const currentMass = state.massEmpty + remainingFuel;
-
-  return {
-    state: { ...state, remainingFuel, currentMass, thrust, fuelLowAlarmSounded, fuelOutAlarmSounded },
-    events,
-  };
+export function resetState() {
+  return createInitialState();
 }
 
-/**
- * Lander.as:85-131 - acceleration, integration, and landing
- * detection/classification for one tick.
- */
-function evolve(state, dt) {
-  const events = [];
-  const { pos, velocity, thrust, cosTheta, sinTheta, currentMass } = state;
-
-  let acceleration = state.acceleration;
-  let crashState = state.crashState;
-  let landingSpeed = state.landingSpeed;
-
-  // Lander.as:85-93 - airborne branch.
-  if (pos.y >= 0) {
-    acceleration = {
-      y: (thrust * cosTheta) / currentMass - GRAVITY,
-      x: (thrust * sinTheta) / currentMass,
-    };
-    if (pos.y > 0) {
-      crashState = "inFlight";
-      landingSpeed = undefined;
-    }
-  }
-
-  // Lander.as:75-76,92-93,122-125 - integrate using this tick's acceleration.
-  let newPos = {
-    x: pos.x + dt * velocity.x + 0.5 * dt * dt * acceleration.x,
-    y: pos.y + dt * velocity.y + 0.5 * dt * dt * acceleration.y,
-  };
-  let newVelocity = {
-    x: velocity.x + acceleration.x * dt,
-    y: velocity.y + acceleration.y * dt,
-  };
-
-  let angle = state.angle;
-  let newCosTheta = cosTheta;
-  let newSinTheta = sinTheta;
-  let newThrust = thrust;
-  let remainingFuel = state.remainingFuel;
-  let currentMassOut = currentMass;
-
-  if (state.crashState === "inFlight" && newPos.y < 0) {
-    // Lander.as:95-121 - the ground is crossed this tick: classify using
-    // the PRE-impact velocity, then zero everything out.
-    const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-    landingSpeed = speed;
-    newPos = { x: newPos.x, y: 0 };
-    newVelocity = { x: 0, y: 0 };
-    acceleration = { x: 0, y: 0 };
-    angle = 0;
-    ({ cosTheta: newCosTheta, sinTheta: newSinTheta } = cosSin(0));
-    newThrust = 0;
-
-    if (speed < SOFT_LANDING_SPEED && state.angle < 0.2) {
-      crashState = "softLanded";
-    } else if (speed < HARD_LANDING_SPEED && state.angle < 0.2) {
-      crashState = "hardLanded";
-    } else {
-      crashState = "crashLanded";
-      remainingFuel = 0; // "fuel forced to 0" - Lander.as:95-121
-      currentMassOut = state.massEmpty;
-      events.push({ type: "soundExplosion" });
-    }
-    events.push({ type: "landed", crashState, landingSpeed: speed });
-  } else if (state.crashState !== "inFlight" && newPos.y <= 0 && newVelocity.y < 0) {
-    // Lander.as:126-131 - already landed: clamp so it can't sink through
-    // the ground.
-    newPos = { ...newPos, y: 0 };
-    newVelocity = { x: 0, y: 0 };
-    acceleration = { x: 0, y: 0 };
-  }
-
-  return {
-    state: {
-      ...state,
-      pos: newPos,
-      velocity: newVelocity,
-      acceleration,
-      angle,
-      cosTheta: newCosTheta,
-      sinTheta: newSinTheta,
-      thrust: newThrust,
-      crashState,
-      landingSpeed,
-      remainingFuel,
-      currentMass: currentMassOut,
-    },
-    events,
-  };
-}
-
-/**
- * One full 40ms physics tick (Lander.evolveOneTimeStep(), fuel use
- * included). `nowMs` must come from src/clock.js's now().
- */
-export function stepLander(state, nowMs) {
-  const dt = (nowMs - state.lastT) / 1000;
-  const { state: afterFuel, events: fuelEvents } = consumeFuel(state, dt);
-  const { state: afterEvolve, events: evolveEvents } = evolve(afterFuel, dt);
-  return {
-    state: { ...afterEvolve, t: state.t + dt, lastT: nowMs },
-    events: [...fuelEvents, ...evolveEvents],
-  };
-}
-
-/**
- * Lander.setThrust() - Lander.as:204-231. Only takes effect while there is
- * fuel left. Note the overflow quirk flagged in the BehaviorSpec's notes:
- * requests above maxThrust clamp the stored thrust but the sound-percentage
- * event still carries the original, uncapped request (so it can exceed
- * 100%). That is reproduced here as described, not "fixed".
- */
+// ---- Thrust control ----
+// "setThrust(thrust) only takes effect while remainingFuel > 0; thrust is
+// clamped to [0, maxThrust]; reaching exactly maxThrust plays a full-thrust
+// sound, any value strictly between 0 and maxThrust adjusts thrust-sound
+// volume proportionally, and exactly 0 stops the thrust sound."
+// (Lander.as:204-232)
 export function setThrust(state, requestedThrust) {
+  // ASSUMPTION: "only takes effect while remainingFuel > 0" is applied
+  // literally and unconditionally - even a request that would only lower
+  // thrust (e.g. toward 0) has no effect once fuel is gone. See
+  // ASSUMPTIONS block.
   if (state.remainingFuel <= 0) {
-    return { state, events: [] };
+    return state;
   }
 
-  const events = [];
-  let thrust;
-
-  if (requestedThrust > state.maxThrust) {
-    thrust = state.maxThrust;
-    events.push({ type: "adjustThrustSound", percentage: (requestedThrust / state.maxThrust) * 100 });
-  } else if (requestedThrust === state.maxThrust) {
-    thrust = state.maxThrust;
-    events.push({ type: "soundThrust" });
-  } else if (requestedThrust <= 0) {
-    thrust = 0;
-    events.push({ type: "soundThrustOff" });
-    events.push({ type: "adjustThrustSoundOff" });
-  } else {
-    thrust = requestedThrust;
-    events.push({ type: "adjustThrustSound", percentage: (requestedThrust / state.maxThrust) * 100 });
-  }
-
-  return { state: { ...state, thrust }, events };
+  // ASSUMPTION: the rule never explicitly states what a *negative*
+  // requested value does. It is reproduced here as ordinary clamping to
+  // the stated [0, maxThrust] range (so a negative request lands on 0,
+  // the same bucket as an explicit 0 request). See ASSUMPTIONS block -
+  // this is exactly the kind of gap rewrite-output.schema.json's own
+  // description calls out as something that must be recorded, not
+  // silently guessed.
+  const thrust = clamp(requestedThrust, 0, MAX_THRUST);
+  return { ...state, thrust };
 }
 
-/** Lander.increaseThrust() - Lander.as:196-203. */
+// "increaseThrust()/decreaseThrust() adjust thrust by ±5% of maxThrust
+// (0.05*maxThrust) through setThrust()." (Lander.as:196-203)
 export function increaseThrust(state) {
   return setThrust(state, state.thrust + THRUST_STEP);
 }
 
-/** Lander.decreaseThrust() - Lander.as:196-203. */
 export function decreaseThrust(state) {
   return setThrust(state, state.thrust - THRUST_STEP);
 }
 
-function angleTurn(state, direction) {
-  const events = [];
-  // Lander.as:233-260 - side-thruster visual/sound fires for any state
-  // except crashLanded, independent of whether the angle itself changes.
-  if (state.crashState !== "crashLanded") {
-    events.push({ type: "sideThruster", side: direction < 0 ? "left" : "right" });
-  }
-  if (state.crashState !== "inFlight") {
-    // Angle only actually changes while inFlight.
-    return { state, events };
-  }
-  const angle = state.angle + direction * ANGLE_STEP_RAD;
-  const { cosTheta, sinTheta } = cosSin(angle);
-  return { state: { ...state, angle, cosTheta, sinTheta }, events };
+// "Spacebar ... Toggles thrust: if current thrust is 0, sets it to
+// maxThrust; otherwise sets it to 0."
+export function toggleThrust(state) {
+  return setThrust(state, state.thrust === 0 ? MAX_THRUST : 0);
 }
 
-/** Lander.angleLeft() - Lander.as:233-260. */
+// ---- Rotation ----
+// "angleLeft()/angleRight() always trigger the corresponding side-thruster
+// animation clip and side-thrust sound unless crashState == 'crashLanded';
+// the angle itself (and cosTheta/sinTheta) only actually changes by
+// 3*pi/180 radians while crashState == 'inFlight'." (Lander.as:233-260)
+// NOTE: the animation/sound side effect is not simulation state, so it is
+// not represented here; src/main.js decides whether to play that visual
+// using the *pre-call* crashState before invoking angleLeft/angleRight.
 export function angleLeft(state) {
-  return angleTurn(state, -1);
+  if (state.crashState !== 'inFlight') return state;
+  return { ...state, angle: state.angle - ANGLE_STEP };
 }
 
-/** Lander.angleRight() - Lander.as:233-260. */
 export function angleRight(state) {
-  return angleTurn(state, 1);
+  if (state.crashState !== 'inFlight') return state;
+  return { ...state, angle: state.angle + ANGLE_STEP };
 }
 
-/** Lander.startMotion() - Lander.as:138-158. Used on a fresh start. */
-export function startMotion(state, nowMs) {
-  return { ...state, inMotion: true, lastT: nowMs };
+// ---- Pause ----
+// "Pausing (P key or via help()) calls myLander.stopMotion() ... shows
+// pausedSign_mc; unpausing calls myLander.restartMotion() ... hiding
+// pausedSign_mc." (DoAction.as:113-127,319-337; Lander.as:148-158)
+// "help() additionally toggles helpPlaque_mc's visibility together with
+// the pause state described above (shown while paused by help, hidden on
+// unpause)." (DoAction.as:319-337)
+export function togglePause(state, { viaHelp = false } = {}) {
+  const motionPaused = !state.motionPaused;
+  // ASSUMPTION: helpPlaqueVisible is only ever toggled by the help-button
+  // path (viaHelp = true), never by the plain P-key path, matching the
+  // rule's wording that it's help() specifically ("additionally") that
+  // does this, not every pause/unpause regardless of trigger. See
+  // ASSUMPTIONS block.
+  const helpPlaqueVisible = viaHelp ? motionPaused : state.helpPlaqueVisible;
+  return { ...state, motionPaused, helpPlaqueVisible };
 }
 
-/**
- * Lander.restartMotion() - Lander.as:138-158. Used to resume after pause:
- * re-stamps lastT but does NOT reset crashState or t.
- */
-export function restartMotion(state, nowMs) {
-  return { ...state, inMotion: true, lastT: nowMs };
-}
+// ---- Fuel ----
+// "useFuel(dt), called every physics tick, reduces remainingFuel by
+// thrust*dt/specificI; plays a low-fuel alarm once when
+// remainingFuel/initialFuel < 0.1 ... and a separate alarm once when
+// remainingFuel reaches exactly 0; recomputes currentMass = massEmpty +
+// remainingFuel; clamps remainingFuel to 0 and thrust to 0 if fuel goes
+// negative." (Lander.as:176-195)
+export function useFuel(state, dt) {
+  // ASSUMPTION: fuel use (and the rest of evolveOneTimeStep below) is
+  // frozen once the lander has left "inFlight". See the matching note on
+  // evolveOneTimeStep for why.
+  if (state.crashState !== 'inFlight') return state;
 
-/** Lander.stopMotion() - Lander.as:138-158. */
-export function stopMotion(state) {
-  return { ...state, inMotion: false };
-}
+  const consumed = (state.thrust * dt) / SPECIFIC_I;
+  let remainingFuel = state.remainingFuel - consumed;
+  let thrust = state.thrust;
 
-/**
- * DoAction.as:282-313 - boulder collision RESPONSE only.
- *
- * PLACEHOLDER BOUNDARY: the hit-test that decides *whether* a collision
- * happened (probe points at the lander body's edges vs. the boulders_mc
- * hit-area) needs on-stage geometry - boulder positions/shapes and the
- * lander body's pixel width/height - that is not in the BehaviorSpec (see
- * its "notes" array: "Absolute on-stage sizes/shapes ... are defined in
- * library assets not included here"). That hit-test is therefore NOT
- * implemented anywhere in this rewrite. This function only applies the
- * documented response once some other, not-yet-available code supplies a
- * `side`.
- */
-export function applyBoulderHit(state, side) {
-  if (state.boulderCrash) {
-    return { state, events: [] };
+  if (remainingFuel < 0) {
+    remainingFuel = 0;
+    thrust = 0;
   }
-  const velocityX = side === "right" ? -2 : 2;
-  const angle = (side === "right" ? -10 : 10) * (Math.PI / 180);
-  const { cosTheta, sinTheta } = cosSin(angle);
+
+  const lowFuelAlarmed =
+    state.lowFuelAlarmed || remainingFuel / INITIAL_FUEL < LOW_FUEL_RATIO;
+  const emptyFuelAlarmed = state.emptyFuelAlarmed || remainingFuel === 0;
+  const currentMass = MASS_EMPTY + remainingFuel;
+
   return {
-    state: {
-      ...state,
-      thrust: 0,
-      velocity: { ...state.velocity, x: velocityX },
-      angle,
-      cosTheta,
-      sinTheta,
-      boulderCrash: true,
-      remainingFuel: 0,
-      currentMass: state.massEmpty,
-    },
-    events: [{ type: "bodyFrame", frame: side === "right" ? "rightDamage" : "leftDamage" }],
+    ...state,
+    remainingFuel,
+    thrust,
+    currentMass,
+    lowFuelAlarmed,
+    emptyFuelAlarmed,
   };
+}
+
+// ---- Landing resolution ----
+// "When pos.y drops below 0 while crashState was 'inFlight', landing is
+// resolved: landingSpeed = sqrt(vx^2+vy^2) is recorded, velocity/
+// acceleration are zeroed, thrust is set to 0, angle/cosTheta/sinTheta are
+// reset to level, and crashState is set to 'softLanded' if landingSpeed <
+// softLandingSpeed (2) and angle < 0.2, 'hardLanded' if landingSpeed <
+// hardLandingSpeed (6) and angle < 0.2, otherwise 'crashLanded' (which
+// also zeroes remaining fuel and plays an explosion sound)."
+// (Lander.as:56-58,95-121)
+function resolveLanding(state) {
+  const speed = Math.sqrt(state.velocity.x ** 2 + state.velocity.y ** 2);
+
+  // ASSUMPTION: pos.y is clamped to exactly 0 at touchdown. The rule never
+  // says this explicitly; only the state table's "y<=0 means on/below the
+  // ground" implies it. See ASSUMPTIONS block.
+  const pos = { ...state.pos, y: 0 };
+
+  // ASSUMPTION: "angle < 0.2" is reproduced literally, with no
+  // Math.abs(), even though this lets a large *negative* tilt count as
+  // "level" for the soft/hard-landing classification. See ASSUMPTIONS
+  // block.
+  let crashState;
+  if (speed < SOFT_LANDING_SPEED && state.angle < ANGLE_LANDING_THRESHOLD) {
+    crashState = 'softLanded';
+  } else if (speed < HARD_LANDING_SPEED && state.angle < ANGLE_LANDING_THRESHOLD) {
+    crashState = 'hardLanded';
+  } else {
+    crashState = 'crashLanded';
+  }
+
+  const remainingFuel = crashState === 'crashLanded' ? 0 : state.remainingFuel;
+  const currentMass = MASS_EMPTY + remainingFuel;
+
+  const nbrSoftLandings = state.nbrSoftLandings + (crashState === 'softLanded' ? 1 : 0);
+  const nbrHardLandings = state.nbrHardLandings + (crashState === 'hardLanded' ? 1 : 0);
+  const nbrLandings = state.nbrLandings + 1;
+
+  return {
+    ...state,
+    pos,
+    velocity: { x: 0, y: 0 },
+    acceleration: { x: 0, y: 0 },
+    thrust: 0,
+    angle: 0,
+    crashState,
+    landingSpeed: speed,
+    remainingFuel,
+    currentMass,
+    nbrLandings,
+    nbrSoftLandings,
+    nbrHardLandings,
+    // ASSUMPTION: `score` is left unchanged here. myScoreKeeper's actual
+    // scoring formula is not part of the given source (BehaviorSpec notes
+    // flag this explicitly), so it cannot be computed without guessing a
+    // value the spec never gave. See ASSUMPTIONS block.
+  };
+}
+
+// ---- Physics tick ----
+// "Each physics tick (evolveOneTimeStep, run on a 40ms setInterval while
+// in motion): computes dt from real elapsed time since last tick; while
+// pos.y >= 0, vertical acceleration = thrust*cosTheta/currentMass -
+// Constants.g and horizontal acceleration = thrust*sinTheta/currentMass;
+// position and velocity are integrated from these using dt (Euler-style
+// with a 0.5*dt^2 position term)." (Lander.as:73-94,122-136)
+export function evolveOneTimeStep(state, dt) {
+  // ASSUMPTION: once crashState leaves "inFlight" (landed or crashed),
+  // every subsequent tick is a complete no-op. Nothing in the
+  // BehaviorSpec says the 40ms interval stops on landing (only pausing is
+  // described as stopping it); but without freezing the state here, the
+  // pos.y=0 clamp from resolveLanding would immediately satisfy
+  // "pos.y >= 0" again and the lander would silently restart falling
+  // through the ground forever. See ASSUMPTIONS block.
+  if (state.crashState !== 'inFlight') return state;
+
+  let next = useFuel(state, dt);
+
+  const cosTheta = Math.cos(next.angle);
+  const sinTheta = Math.sin(next.angle);
+
+  const acceleration = {
+    x: (next.thrust * sinTheta) / next.currentMass,
+    y: (next.thrust * cosTheta) / next.currentMass - G,
+  };
+
+  const velocity = {
+    x: next.velocity.x + acceleration.x * dt,
+    y: next.velocity.y + acceleration.y * dt,
+  };
+
+  const pos = {
+    x: next.pos.x + next.velocity.x * dt + 0.5 * acceleration.x * dt * dt,
+    y: next.pos.y + next.velocity.y * dt + 0.5 * acceleration.y * dt * dt,
+  };
+
+  next = { ...next, acceleration, velocity, pos };
+
+  if (pos.y < 0) {
+    next = resolveLanding(next);
+  }
+
+  return next;
+}
+
+// ---- Boulder collision ----
+// "detectBoulderCrash() tests two points at the lander's lower-left and
+// lower-right ... against view_mc.boulders_mc with hitTest() ..."
+// (DoAction.as:282-313)
+export function detectBoulderCrash(state) {
+  // PLACEHOLDER, per rewriter.md requirement #7: the BehaviorSpec's own
+  // notes flag that real on-stage boulder geometry/positions were never
+  // verifiable from the given source. Rather than invent boulder
+  // positions, this is a disabled stub that never reports a collision.
+  // See ASSUMPTIONS block.
+  return state;
+}
+
+// ---- World-to-screen conversion ----
+// "World-to-screen conversion uses pixPerMeter = 7: the lander holder's
+// screen x = pos.x * pixPerMeter and screen y = 0.9*stageH -
+// pos.y * pixPerMeter." (DoAction.as:166-167,380)
+export function worldToScreen(pos) {
+  return {
+    x: pos.x * PIX_PER_METER,
+    y: 0.9 * STAGE_H - pos.y * PIX_PER_METER,
+  };
+}
+
+// ---- Camera (mag/Nmag/pan) ----
+// "updateGame() rescales the camera (mag) by x3 or /3 when the lander's
+// screen point crosses 75% (zoom in, limited to Nmag < 1) or 5% (zoom
+// out, limited to Nmag > -2) of stage height, via resetView(), and pans
+// view_mc horizontally to keep the lander's screen x within 10%-90% of
+// stage width." (DoAction.as:162-193)
+export function updateCamera(state) {
+  const screen = worldToScreen(state.pos);
+  const fractionY = screen.y / STAGE_H;
+
+  let { mag, nmag } = state;
+  // ASSUMPTION: which crossing direction means "zoom in" vs "zoom out" is
+  // inferred (zoom in - larger mag - near the ground for landing detail;
+  // zoom out near the top so a high/far lander stays visible), since the
+  // BehaviorSpec doesn't spell out the direction explicitly. See
+  // ASSUMPTIONS block.
+  if (fractionY > 0.75 && nmag < 1) {
+    mag *= 3;
+    nmag += 1;
+  } else if (fractionY < 0.05 && nmag > -2) {
+    mag /= 3;
+    nmag -= 1;
+  }
+
+  const fractionX = screen.x / STAGE_W;
+  let viewOffsetX = state.viewOffsetX;
+  if (fractionX > 0.9) {
+    viewOffsetX -= (fractionX - 0.9) * STAGE_W;
+  } else if (fractionX < 0.1) {
+    viewOffsetX += (0.1 - fractionX) * STAGE_W;
+  }
+
+  return { ...state, mag, nmag, viewOffsetX };
 }

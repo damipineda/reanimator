@@ -1,14 +1,15 @@
 // src/clock.js
 //
-// Single source of "wall-clock" time for the whole app.
+// Single exported time source (rewriter.md hard requirement #4). Every
+// other module must call now() instead of calling Date.now()/
+// performance.now() directly, so a test can later substitute a fixed
+// clock here without touching physics.js or main.js.
 //
-// BehaviorSpec rule (citation Lander.as:75-76,122-125): the physics
-// integration step uses dt = (getTimer() - lastT) / 1000, i.e. REAL elapsed
-// wall-clock time read each tick, not a fixed 40ms step. We mirror that
-// exactly, but funnel every read of "the current time" through this one
-// function (rewriter.md hard requirement #4) so nothing else in the app
-// calls Date.now()/performance.now() directly, and a test can later swap
-// this module out for a fake, controllable clock.
+// BehaviorSpec rule: "Each physics tick (evolveOneTimeStep, run on a 40ms
+// setInterval while in motion): computes dt from real elapsed time since
+// last tick..." (citation Lander.as:73-94,122-136). now() is the "real
+// elapsed time" source dt is computed from.
+
 export function now() {
   return performance.now();
 }

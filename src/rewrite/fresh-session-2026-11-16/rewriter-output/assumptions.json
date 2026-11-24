@@ -1,0 +1,72 @@
+[
+  {
+    "description": "What setThrust() does when the requested thrust value is negative. The rule only states the output is 'clamped to [0, maxThrust]' and separately describes sound behavior for the maxThrust / strictly-between / exactly-0 cases, without ever addressing a negative input directly.",
+    "choiceMade": "Negative requested-thrust values are clamped to 0 by the same Math.max(0, Math.min(maxThrust, value)) clamp used for all other out-of-range requests, landing in the same 'exactly 0' bucket as an explicit zero request.",
+    "citation": "Lander.as:204-232"
+  },
+  {
+    "description": "Whether setThrust() being gated by 'only takes effect while remainingFuel > 0' also blocks a request that would only lower thrust (e.g. toward or to 0), or only blocks requests that would raise it.",
+    "choiceMade": "Applied the gate literally and unconditionally: while remainingFuel <= 0, setThrust() (and therefore increaseThrust/decreaseThrust/toggleThrust) is a complete no-op, including requests to reduce thrust.",
+    "citation": "Lander.as:204-232"
+  },
+  {
+    "description": "Units for the dt value passed into the physics tick. The rule only says 'computes dt from real elapsed time since last tick,' not what unit that time is expressed in.",
+    "choiceMade": "dt is converted to seconds before being passed to physics.js, since the gravity constant (g=1.6) and the integration formulas are only physically consistent with SI units (m/s^2, m/s) if dt is in seconds.",
+    "citation": "Lander.as:73-94,122-136"
+  },
+  {
+    "description": "Whether the physics tick (evolveOneTimeStep/useFuel) keeps running once crashState leaves 'inFlight'. Only pausing (P key / help()) is explicitly described as stopping the tick; landing/crashing is not.",
+    "choiceMade": "evolveOneTimeStep and useFuel are both complete no-ops whenever crashState is not 'inFlight', so the lander's state is frozen after landing/crashing instead of re-entering free fall once pos.y is clamped back to 0.",
+    "citation": "Lander.as:56-58,95-121"
+  },
+  {
+    "description": "Whether pos.y is clamped to exactly 0 when a landing is resolved. The rule describes velocity/acceleration/thrust/angle all being reset, but never states what happens to the stored pos.y value itself; only the state table's 'y<=0 means on/below the ground' description implies it should end up at ground level.",
+    "choiceMade": "pos.y is explicitly set to 0 in resolveLanding(), rather than left at whatever negative value the last integration step produced.",
+    "citation": "Lander.as:56-58,95-121"
+  },
+  {
+    "description": "Whether the landing-angle test ('angle < softLandingSpeed/hardLandingSpeed... and angle < 0.2') uses the signed angle or its absolute value. The rule's literal wording has no abs().",
+    "choiceMade": "Implemented literally with the signed angle (no Math.abs()), so a strongly negative tilt can still satisfy 'angle < 0.2' for soft/hard-landing classification purposes, exactly as the literal rule text states.",
+    "citation": "Lander.as:56-58,95-121"
+  },
+  {
+    "description": "For a crashLanded touchdown, what exact value and comparison operator decide the 'damaged' vs 'killed' message/frame split. The BehaviorSpec only says this is 'decided by comparing the rounded landing speed string to myLander.damageLandingSpeed' without stating the operator or whether rounding happens before or after the comparison.",
+    "choiceMade": "The landing speed is first rounded to 1 decimal place (as already required for display), then compared with a strict '<' against DAMAGE_LANDING_SPEED (12): below 12 is 'damaged' (crashDamaged_str, bottomDamage frame), 12 or above is 'killed' (crashKilled_str, destroyed frame) - mirroring the '<' used by the soft/hard-landing thresholds.",
+    "citation": "DoAction.as:214-256"
+  },
+  {
+    "description": "myScoreKeeper's internal scoring formula (how 'score' itself increases) is not part of the given source files, per the BehaviorSpec's own notes.",
+    "choiceMade": "state.score is left at its initial placeholder value (0) and never incremented, while nbrSoftLandings/nbrHardLandings - which ARE fully specified by the landing-classification rule - are tracked and incremented directly in resolveLanding().",
+    "citation": "state table entry 'score / nbrSoftLandings / nbrHardLandings'"
+  },
+  {
+    "description": "detectBoulderCrash() requires real on-stage boulder/terrain geometry to hit-test against, which the BehaviorSpec's own notes flag as unverifiable from the given source ('Actual values of stageW/stageH... not visible', boulder positions never given).",
+    "choiceMade": "Implemented physics.detectBoulderCrash() as a disabled placeholder that always returns the state unchanged (never reports a collision), rather than inventing boulder geometry.",
+    "citation": "DoAction.as:282-313"
+  },
+  {
+    "description": "Actual pixel dimensions of the Flash stage (Util.STAGEW/STAGEH), needed for the camera zoom/pan fractional math, are not given anywhere in the BehaviorSpec (explicitly flagged as unverified in its notes).",
+    "choiceMade": "Used placeholder STAGE_W=800 / STAGE_H=600 pixel constants (clearly labeled in physics.js) so the fractional camera rules (75%/5% height crossings, 10%-90% width pan, Nmag<1/Nmag>-2 bounds) - which the spec DOES state precisely - can still run against some concrete numbers.",
+    "citation": "DoAction.as:162-193"
+  },
+  {
+    "description": "Which direction of the lander's screen-Y fraction crossing 75% vs. 5% of stage height triggers zoom-in vs. zoom-out. The rule states the two thresholds and the x3/÷3 actions but not which direction of crossing maps to which action.",
+    "choiceMade": "Screen-Y fraction above 0.75 (lander near the bottom/ground of the current view) triggers zoom-in (mag *= 3); below 0.05 (lander near the top of the current view) triggers zoom-out (mag /= 3), inferred from the natural reading that landing needs more detail and a high/far lander needs a wider view.",
+    "citation": "DoAction.as:162-193"
+  },
+  {
+    "description": "Whether helpPlaque_mc's visibility is tied to motionPaused in general (any pause source) or only to pauses triggered via the Help button specifically. The rule says 'help() additionally toggles helpPlaque_mc's visibility together with the pause state,' describing help()'s own behavior.",
+    "choiceMade": "helpPlaqueVisible is only ever changed by the Help-button-triggered pause/unpause path (togglePause(state, {viaHelp:true})); the plain P-key pause/unpause path leaves it untouched.",
+    "citation": "DoAction.as:319-337"
+  },
+  {
+    "description": "Sound effects (thrust/side-thruster sounds, low-fuel/empty-fuel alarms, explosion sound, pause alarm) are described throughout the rules but no audio assets or sound-playing files were in the requested file set (index.html, strings.json, src/clock.js, src/physics.js, src/render.js, src/main.js).",
+    "choiceMade": "No audio is played. The underlying boolean flags the rules reference (lowFuelAlarmed, emptyFuelAlarmed) are still tracked as physics state for fidelity/determinism, but nothing consumes them to trigger actual sound.",
+    "citation": "Lander.as:176-195; Lander.as:204-232; DoAction.as:113-127,319-337"
+  },
+  {
+    "description": "Label/caption text for the gauges, score panel, paused sign, help button, and help plaque (Height/Thrust/Range/Fuel/Vertical speed/Horizontal speed/Score/Soft landings/Hard landings/PAUSED/Help/help instructions) is not covered by the BehaviorSpec's literalStrings array at all - only landing-report and button-label text is given verbatim.",
+    "choiceMade": "Added original placeholder English copy for these labels directly in strings.json (not inline in code, per requirement #2), separate from and never overwriting the spec's actual literalStrings values, which are reproduced verbatim.",
+    "citation": "literalStrings (BehaviorSpec)"
+  }
+]

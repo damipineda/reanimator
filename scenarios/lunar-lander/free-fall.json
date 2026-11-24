@@ -1,0 +1,8 @@
+{
+  "id": "free-fall",
+  "viewport": { "width": 820, "height": 640 },
+  "events": [],
+  "checkpoints": [2000, 5000, 9000],
+  "_description": "No input besides Start. Pure gravity (Constants.g=1.6) from the initial position (45,50)m. Lands ~7.9s in; checkpoints at 2s/5s (in-flight trajectory) and 9s (after touchdown). This is the same free-fall scenario used in Phase 0's own comparison (see docs/KIRO_NOTES.md and work/lunar-lander/compare/run-comparison.mjs) - re-run here through the formalized src/verify/ harness instead of the ad hoc Phase 0 scripts.",
+  "_expectedOutcome": "crashLanded (landing speed ~12.6-12.7 m/s, well above damageLandingSpeed=12 and hardLandingSpeed=6; angle=0 throughout, so classification is driven entirely by speed, not the angle quirk - contrast with crash-tilt.json)."
+}

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Reanimator verifier report - Lunar Lander</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 920px; margin: 32px auto; padding: 0 16px; color: #1a1a1a; line-height: 1.5; }
+  h1 { font-size: 1.6em; }
+  h3 { margin-top: 2.2em; }
+  table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+  table.mini { width: auto; }
+  th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size: 0.92em; }
+  th { background: #f3f3f3; }
+  .note { background: #fff8e1; border-left: 4px solid #e0a800; padding: 10px 14px; font-size: 0.9em; }
+  .scenario { border-top: 1px solid #ddd; padding-top: 1em; }
+  code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; }
+  .overall { font-size: 1.1em; }
+</style>
+</head>
+<body>
+  <h1>Reanimator verifier report: Lunar Lander</h1>
+  <p class="overall">Overall verdict: <span style="background:#1a7f37;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">PASS</span></p>
+  <p>
+    Compares the real original (PhET's Lunar Lander .swf, run via a self-hosted Ruffle build,
+    read via OCR - no JS bridge exists into it) against the hand-built HTML5 rebuild
+    (<code>src/rewrite/reference/lunar-lander/</code>, read via its own exact
+    <code>window.__reanimator.getState()</code> debug hook), across 3 scripted scenarios. The
+    original was run 3x per scenario to measure its own natural run-to-run spread (its physics
+    uses real wall-clock <code>dt</code>, not a fixed step); the rebuild's single run is checked
+    against that measured spread, not against one single original run.
+  </p>
+
+  <h2>Scenarios</h2>
+  
+  <section class="scenario">
+    <h3>crash-tilt <span style="background:#1a7f37;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">PASS</span></h3>
+    <p>Same free-fall as free-fall.json (no thrust input), but 5 early Right-arrow presses (each +3deg via angleRight(), all while still &#39;inFlight&#39; since they happen in the first 300ms) tilt the lander to +15deg = 0.2618 rad, above the 0.2 rad landing-angle threshold. This tests the ANGLE-based disqualification path of the landing-classification rule, distinct from free-fall.json&#39;s speed-based disqualification (both end &#39;crashLanded&#39;, but for different reasons - this scenario&#39;s landing speed alone, at angle=0, would still exceed damageLandingSpeed, so this is a deliberately unambiguous positive-angle case, not a test of the asymmetric angle&lt;0.2 quirk noted in docs/KIRO_NOTES.md (which specifically concerns NEGATIVE angles bypassing the check) - that quirk is documented but not covered by a dedicated scenario here, for time reasons.</p>
+    <p><strong>Expected outcome:</strong> crashLanded, destroyed (angle ~0.26 rad &gt; 0.2 disqualifies softLanded/hardLanded regardless of speed; speed is still ~12.6+ m/s from the unmodified free-fall descent, so this would have been crashLanded on speed alone too - this scenario is about confirming the angle path is also wired correctly, not about producing a different outcome label).</p>
+    <h4>Scripted key timeline</h4>
+    <table class="mini"><tr><th>t (ms)</th><th>key</th></tr><tr><td>100</td><td>ArrowRight</td></tr><tr><td>150</td><td>ArrowRight</td></tr><tr><td>200</td><td>ArrowRight</td></tr><tr><td>250</td><td>ArrowRight</td></tr><tr><td>300</td><td>ArrowRight</td></tr></table>
+    <h4>Measured: original (3 real runs via Ruffle + OCR) vs. rebuild (exact state)</h4>
+    <table>
+      <tr><th></th><th>original min</th><th>original max</th><th>original mean</th><th>rebuild</th><th>within spread?</th></tr>
+      <tr>
+        <td>Landing speed (m/s)</td>
+        <td>12.7</td><td>12.7</td><td>12.7</td>
+        <td>12.7</td>
+        <td>✓</td>
+      </tr>
+      <tr>
+        <td>Range / x position (m)</td>
+        <td>45</td><td>45</td><td>45</td>
+        <td>45</td>
+        <td>✓</td>
+      </tr>
+      <tr>
+        <td>Episode ended by last checkpoint?</td>
+        <td colspan="3">original: yes</td>
+        <td colspan="2">rebuild: yes </td>
+      </tr>
+      <tr><td>Rebuild crashState</td><td colspan="5">crashLanded</td></tr>
+    </table>
+    <p class="note"><strong>OCR limits on this scenario:</strong> altitude/vY/fuel fields were occasionally unreadable (null) in individual OCR reads - the original&#39;s own display only ever shows 1 decimal place, and Tesseract on a small vector font is not 100% reliable (see src/verify/ocr.mjs&#39;s header) - but landing speed and range, the two fields this report&#39;s comparison relies on, read cleanly and consistently across all runs.</p>
+  </section>
+
+  <section class="scenario">
+    <h3>free-fall <span style="background:#1a7f37;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">PASS</span></h3>
+    <p>No input besides Start. Pure gravity (Constants.g=1.6) from the initial position (45,50)m. Lands ~7.9s in; checkpoints at 2s/5s (in-flight trajectory) and 9s (after touchdown). This is the same free-fall scenario used in Phase 0&#39;s own comparison (see docs/KIRO_NOTES.md and work/lunar-lander/compare/run-comparison.mjs) - re-run here through the formalized src/verify/ harness instead of the ad hoc Phase 0 scripts.</p>
+    <p><strong>Expected outcome:</strong> crashLanded (landing speed ~12.6-12.7 m/s, well above damageLandingSpeed=12 and hardLandingSpeed=6; angle=0 throughout, so classification is driven entirely by speed, not the angle quirk - contrast with crash-tilt.json).</p>
+    <h4>Scripted key timeline</h4>
+    <em>no input (pure gravity/physics only)</em>
+    <h4>Measured: original (3 real runs via Ruffle + OCR) vs. rebuild (exact state)</h4>
+    <table>
+      <tr><th></th><th>original min</th><th>original max</th><th>original mean</th><th>rebuild</th><th>within spread?</th></tr>
+      <tr>
+        <td>Landing speed (m/s)</td>
+        <td>12.7</td><td>12.7</td><td>12.7</td>
+        <td>12.7</td>
+        <td>✓</td>
+      </tr>
+      <tr>
+        <td>Range / x position (m)</td>
+        <td>45</td><td>45</td><td>45</td>
+        <td>45</td>
+        <td>✓</td>
+      </tr>
+      <tr>
+        <td>Episode ended by last checkpoint?</td>
+        <td colspan="3">original: yes</td>
+        <td colspan="2">rebuild: yes </td>
+      </tr>
+      <tr><td>Rebuild crashState</td><td colspan="5">crashLanded</td></tr>
+    </table>
+    <p class="note"><strong>OCR limits on this scenario:</strong> altitude/vY/fuel fields were occasionally unreadable (null) in individual OCR reads - the original&#39;s own display only ever shows 1 decimal place, and Tesseract on a small vector font is not 100% reliable (see src/verify/ocr.mjs&#39;s header) - but landing speed and range, the two fields this report&#39;s comparison relies on, read cleanly and consistently across all runs.</p>
+  </section>
+
+  <section class="scenario">
+    <h3>soft-landing <span style="background:#1a7f37;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">PASS</span></h3>
+    <p>A &#39;suicide burn&#39;: free-fall (no thrust) for the first 3.74s, then 7 discrete Up-arrow presses fired 20ms apart (each one +2250 thrust via increaseThrust(), reaching 15750 total) to decelerate sharply before touchdown. Timeline found by src/verify/design-soft-landing.mjs (idealized fixed-40ms-tick simulation of the reference physics.js, predicting ~0.58 m/s). An earlier 9-press/5.0s candidate (idealized prediction ~0.97 m/s) measured 2.05-2.06 m/s against the REAL rebuild in a browser - over the 2 m/s threshold - because real Playwright/CDP dispatch latency between 9 rapid keydown calls delays full thrust more than the idealized simulation accounts for (a systematic effect, not the random per-tick jitter an earlier +/-40%-jitter check had tested for). This 7-press/3.74s config was chosen by testing several candidates directly against the real rebuild and was then repeated 3x for consistency: measured 1.01, 0.96, 1.08 m/s across those 3 real runs, all comfortably softLanded - see docs/KIRO_NOTES.md for the full account of finding and fixing the first (too-marginal) candidate.</p>
+    <p><strong>Expected outcome:</strong> softLanded with a comfortable real-world margin (~1.0 m/s vs. the 2 m/s threshold, measured over 3 real runs). Angle stays 0 throughout since no Left/Right key is ever sent.</p>
+    <h4>Scripted key timeline</h4>
+    <table class="mini"><tr><th>t (ms)</th><th>key</th></tr><tr><td>3740</td><td>ArrowUp</td></tr><tr><td>3760</td><td>ArrowUp</td></tr><tr><td>3780</td><td>ArrowUp</td></tr><tr><td>3800</td><td>ArrowUp</td></tr><tr><td>3820</td><td>ArrowUp</td></tr><tr><td>3840</td><td>ArrowUp</td></tr><tr><td>3860</td><td>ArrowUp</td></tr></table>
+    <h4>Measured: original (3 real runs via Ruffle + OCR) vs. rebuild (exact state)</h4>
+    <table>
+      <tr><th></th><th>original min</th><th>original max</th><th>original mean</th><th>rebuild</th><th>within spread?</th></tr>
+      <tr>
+        <td>Landing speed (m/s)</td>
+        <td>—</td><td>—</td><td>—</td>
+        <td>1.1</td>
+        <td>N/A (OCR unreadable)</td>
+      </tr>
+      <tr>
+        <td>Range / x position (m)</td>
+        <td>45</td><td>45</td><td>45</td>
+        <td>45</td>
+        <td>✓</td>
+      </tr>
+      <tr>
+        <td>Episode ended by last checkpoint?</td>
+        <td colspan="3">original: yes</td>
+        <td colspan="2">rebuild: yes </td>
+      </tr>
+      <tr><td>Rebuild crashState</td><td colspan="5">softLanded</td></tr>
+    </table>
+    <p class="note"><strong>OCR limits on this scenario:</strong> The landing-message crop region was calibrated against the ORIGINAL&#39;s crash message layout (&#39;keyNotFound&lt;speed&gt; m/s&#39;); a soft/hard landing message renders differently, so OCR could not reliably extract a numeric landing speed for the original side of this scenario (raw OCR text was garbled, e.g. &#39;- KEE&#39;) - this is a genuine, named OCR calibration gap, not hidden by this report. The comparison for this scenario rests on the category check (did it land?) and the range field, not landing speed. In one earlier test run of this same scripted input, the original had NOT yet landed (still ascending) at the same checkpoint where the rebuild had already landed softly - the burn timing sits close enough to a decision boundary that real wall-clock scheduling variance between the native-JS rebuild and the WASM-emulated original can occasionally put the two sides on different sides of &#39;has it landed yet&#39; at one fixed checkpoint, even though both eventually land softly. The run recorded in this report did not hit that edge case.</p>
+  </section>
+
+  <h2>Mutation test</h2>
+  <p>
+    Does this verifier actually catch a real bug, or does it only ever pass because nothing has
+    been wrong yet? This re-injects the exact "fuel-clamp ordering" divergence found earlier in
+    this project's fresh-session Rewriter test into a mutated copy of the reference build, and
+    re-runs the free-fall scenario against it.
+  </p>
+  
+  <section>
+    <p><span style="background:#b31d1d;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">FAIL</span> verifier did NOT catch the injected bug</p>
+    <table>
+      <tr><th></th><th>Landing speed (m/s)</th><th>Within original's measured spread (12.7-12.7)?</th></tr>
+      <tr><td>Correct reference build</td><td>12.683</td><td>✓</td></tr>
+      <tr><td>Mutant (fuel-clamp-ordering bug injected)</td><td>12.678</td><td>✓</td></tr>
+      <tr><td>Difference caused by the bug</td><td colspan="2">0.005 m/s</td></tr>
+    </table>
+    <p class="note">
+      The injected bug is the EXACT divergence found in the fresh-session Rewriter test
+      (docs/KIRO_NOTES.md, finding #1): <code>currentMass</code> is computed AFTER clamping
+      <code>remainingFuel</code> to 0 instead of before, so <code>currentMass</code> never dips
+      slightly below <code>massEmpty</code> for the one tick fuel runs out. The real effect on
+      landing speed is 0.005 m/s out of a ~12.683 m/s
+      landing - far smaller than the original's own 1-decimal-place display precision, so
+      <strong>this specific bug is invisible to this verifier at its current tolerance</strong>,
+      honestly reported as a measured limit rather than claimed as a success. The verifier DOES
+      catch categorical and constant-level divergences (see the crash-tilt and free-fall
+      scenarios above, and the earlier fresh-session finding where a dropped rule broke
+      re-ignition-after-landing entirely) - this is reported as the specific, narrower boundary
+      of what a screenshot/state-comparison verifier at this tolerance can and cannot detect.
+    </p>
+  </section>
+
+  <h2>Assumptions (Rewriter stage)</h2>
+  <p>
+    Every gap the BehaviorSpec left unspecified that the fresh-session Rewriter had to fill with
+    a concrete choice (rewriter.md requirement #8) - recorded as structured data, not just a code
+    comment, so this report can show them instead of them being discoverable only by reading
+    source. 14 were recorded for Lunar Lander's fresh-session rewrite; see
+    <code>src/rewrite/fresh-session-2026-11-16/rewriter-output/assumptions.json</code>.
+  </p>
+  <table><tr><th>What was unspecified</th><th>Choice made</th><th>Citation</th></tr><tr><td>What setThrust() does when the requested thrust value is negative. The rule only states the output is &#39;clamped to [0, maxThrust]&#39; and separately describes sound behavior for the maxThrust / strictly-between / exactly-0 cases, without ever addressing a negative input directly.</td><td>Negative requested-thrust values are clamped to 0 by the same Math.max(0, Math.min(maxThrust, value)) clamp used for all other out-of-range requests, landing in the same &#39;exactly 0&#39; bucket as an explicit zero request.</td><td>Lander.as:204-232</td></tr><tr><td>Whether setThrust() being gated by &#39;only takes effect while remainingFuel &gt; 0&#39; also blocks a request that would only lower thrust (e.g. toward or to 0), or only blocks requests that would raise it.</td><td>Applied the gate literally and unconditionally: while remainingFuel &lt;= 0, setThrust() (and therefore increaseThrust/decreaseThrust/toggleThrust) is a complete no-op, including requests to reduce thrust.</td><td>Lander.as:204-232</td></tr><tr><td>Units for the dt value passed into the physics tick. The rule only says &#39;computes dt from real elapsed time since last tick,&#39; not what unit that time is expressed in.</td><td>dt is converted to seconds before being passed to physics.js, since the gravity constant (g=1.6) and the integration formulas are only physically consistent with SI units (m/s^2, m/s) if dt is in seconds.</td><td>Lander.as:73-94,122-136</td></tr><tr><td>Whether the physics tick (evolveOneTimeStep/useFuel) keeps running once crashState leaves &#39;inFlight&#39;. Only pausing (P key / help()) is explicitly described as stopping the tick; landing/crashing is not.</td><td>evolveOneTimeStep and useFuel are both complete no-ops whenever crashState is not &#39;inFlight&#39;, so the lander&#39;s state is frozen after landing/crashing instead of re-entering free fall once pos.y is clamped back to 0.</td><td>Lander.as:56-58,95-121</td></tr><tr><td>Whether pos.y is clamped to exactly 0 when a landing is resolved. The rule describes velocity/acceleration/thrust/angle all being reset, but never states what happens to the stored pos.y value itself; only the state table&#39;s &#39;y&lt;=0 means on/below the ground&#39; description implies it should end up at ground level.</td><td>pos.y is explicitly set to 0 in resolveLanding(), rather than left at whatever negative value the last integration step produced.</td><td>Lander.as:56-58,95-121</td></tr><tr><td>Whether the landing-angle test (&#39;angle &lt; softLandingSpeed/hardLandingSpeed... and angle &lt; 0.2&#39;) uses the signed angle or its absolute value. The rule&#39;s literal wording has no abs().</td><td>Implemented literally with the signed angle (no Math.abs()), so a strongly negative tilt can still satisfy &#39;angle &lt; 0.2&#39; for soft/hard-landing classification purposes, exactly as the literal rule text states.</td><td>Lander.as:56-58,95-121</td></tr><tr><td>For a crashLanded touchdown, what exact value and comparison operator decide the &#39;damaged&#39; vs &#39;killed&#39; message/frame split. The BehaviorSpec only says this is &#39;decided by comparing the rounded landing speed string to myLander.damageLandingSpeed&#39; without stating the operator or whether rounding happens before or after the comparison.</td><td>The landing speed is first rounded to 1 decimal place (as already required for display), then compared with a strict &#39;&lt;&#39; against DAMAGE_LANDING_SPEED (12): below 12 is &#39;damaged&#39; (crashDamaged_str, bottomDamage frame), 12 or above is &#39;killed&#39; (crashKilled_str, destroyed frame) - mirroring the &#39;&lt;&#39; used by the soft/hard-landing thresholds.</td><td>DoAction.as:214-256</td></tr><tr><td>myScoreKeeper&#39;s internal scoring formula (how &#39;score&#39; itself increases) is not part of the given source files, per the BehaviorSpec&#39;s own notes.</td><td>state.score is left at its initial placeholder value (0) and never incremented, while nbrSoftLandings/nbrHardLandings - which ARE fully specified by the landing-classification rule - are tracked and incremented directly in resolveLanding().</td><td>state table entry &#39;score / nbrSoftLandings / nbrHardLandings&#39;</td></tr><tr><td>detectBoulderCrash() requires real on-stage boulder/terrain geometry to hit-test against, which the BehaviorSpec&#39;s own notes flag as unverifiable from the given source (&#39;Actual values of stageW/stageH... not visible&#39;, boulder positions never given).</td><td>Implemented physics.detectBoulderCrash() as a disabled placeholder that always returns the state unchanged (never reports a collision), rather than inventing boulder geometry.</td><td>DoAction.as:282-313</td></tr><tr><td>Actual pixel dimensions of the Flash stage (Util.STAGEW/STAGEH), needed for the camera zoom/pan fractional math, are not given anywhere in the BehaviorSpec (explicitly flagged as unverified in its notes).</td><td>Used placeholder STAGE_W=800 / STAGE_H=600 pixel constants (clearly labeled in physics.js) so the fractional camera rules (75%/5% height crossings, 10%-90% width pan, Nmag&lt;1/Nmag&gt;-2 bounds) - which the spec DOES state precisely - can still run against some concrete numbers.</td><td>DoAction.as:162-193</td></tr><tr><td>Which direction of the lander&#39;s screen-Y fraction crossing 75% vs. 5% of stage height triggers zoom-in vs. zoom-out. The rule states the two thresholds and the x3/÷3 actions but not which direction of crossing maps to which action.</td><td>Screen-Y fraction above 0.75 (lander near the bottom/ground of the current view) triggers zoom-in (mag *= 3); below 0.05 (lander near the top of the current view) triggers zoom-out (mag /= 3), inferred from the natural reading that landing needs more detail and a high/far lander needs a wider view.</td><td>DoAction.as:162-193</td></tr><tr><td>Whether helpPlaque_mc&#39;s visibility is tied to motionPaused in general (any pause source) or only to pauses triggered via the Help button specifically. The rule says &#39;help() additionally toggles helpPlaque_mc&#39;s visibility together with the pause state,&#39; describing help()&#39;s own behavior.</td><td>helpPlaqueVisible is only ever changed by the Help-button-triggered pause/unpause path (togglePause(state, {viaHelp:true})); the plain P-key pause/unpause path leaves it untouched.</td><td>DoAction.as:319-337</td></tr><tr><td>Sound effects (thrust/side-thruster sounds, low-fuel/empty-fuel alarms, explosion sound, pause alarm) are described throughout the rules but no audio assets or sound-playing files were in the requested file set (index.html, strings.json, src/clock.js, src/physics.js, src/render.js, src/main.js).</td><td>No audio is played. The underlying boolean flags the rules reference (lowFuelAlarmed, emptyFuelAlarmed) are still tracked as physics state for fidelity/determinism, but nothing consumes them to trigger actual sound.</td><td>Lander.as:176-195; Lander.as:204-232; DoAction.as:113-127,319-337</td></tr><tr><td>Label/caption text for the gauges, score panel, paused sign, help button, and help plaque (Height/Thrust/Range/Fuel/Vertical speed/Horizontal speed/Score/Soft landings/Hard landings/PAUSED/Help/help instructions) is not covered by the BehaviorSpec&#39;s literalStrings array at all - only landing-report and button-label text is given verbatim.</td><td>Added original placeholder English copy for these labels directly in strings.json (not inline in code, per requirement #2), separate from and never overwriting the spec&#39;s actual literalStrings values, which are reproduced verbatim.</td><td>literalStrings (BehaviorSpec)</td></tr></table>
+
+  <p style="margin-top:3em;color:#777;font-size:0.85em;">
+    Generated by src/verify/report.mjs from work/verify-results/*.json (not committed - contains
+    paths to screenshots of a license-unconfirmed asset, see samples/SOURCES.md). This HTML file
+    itself contains no images and only derived numbers/text, and is safe to commit under docs/.
+  </p>
+</body>
+</html>

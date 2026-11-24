@@ -29,6 +29,36 @@ what diverged, and why.
   `node --check` / `JSON.parse` (syntax-valid); none have been exercised at
   runtime (no browser/DOM in this check).
 
+## Re-run (same day) to test `literalStrings` / `assumptions`
+
+The BehaviorSpec and Rewriter contracts were extended with two fields
+(`literalStrings`, `assumptions` - see `src/contracts/types.ts`,
+`behavior-spec.schema.json`, `rewrite-output.schema.json`) and
+`analyzer.md`/`rewriter.md` were updated to require them. Both stages were
+re-run fresh (same 4 source files, same method as above) against the
+updated prompts to check two things found in the first run:
+
+1. **Literal UI strings** (`softLanding_str`, `hardLanding_str`, etc.) -
+   present in the source the whole time, but not surfaced to the Rewriter
+   last time (see `docs/KIRO_NOTES.md` finding #3). This time the Analyzer's
+   `literalStrings` array contains all 8 literal strings, verbatim, with
+   citations, and the Rewriter's `strings.json` uses them directly instead
+   of a `[placeholder: ... not specified]` marker.
+2. **The negative-`setThrust()` case** (finding #2): the Rewriter made the
+   *same* choice as before (clamp to 0), but this time it is a recorded,
+   structured entry in `rewriter-output/assumptions.json` - not a choice
+   buried only in a code comment. 14 assumptions were recorded in total,
+   covering every other case this session's Rewriter had to decide un-cited
+   (dt's unit, whether the physics tick freezes after landing, boulder
+   geometry, stage pixel dimensions, zoom direction, help-plaque scope,
+   missing audio, and more). This is the fix for the exact gap
+   `docs/KIRO_NOTES.md`'s first comparison flagged: "the one place the
+   Rewriter silently guessed instead of flagging the gap."
+
+`behavior-spec.json` and `rewriter-output/` below are this re-run's output
+(superseding the first run's files, which are no longer on disk - only
+their content and findings survive, in `docs/KIRO_NOTES.md`).
+
 ## Note on an earlier, discarded run
 
 An earlier attempt at this same test (same day) used a *manually trimmed*

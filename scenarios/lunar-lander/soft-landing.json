@@ -1,0 +1,16 @@
+{
+  "id": "soft-landing",
+  "viewport": { "width": 820, "height": 640 },
+  "events": [
+    { "t": 3740, "type": "keydown", "key": "ArrowUp" },
+    { "t": 3760, "type": "keydown", "key": "ArrowUp" },
+    { "t": 3780, "type": "keydown", "key": "ArrowUp" },
+    { "t": 3800, "type": "keydown", "key": "ArrowUp" },
+    { "t": 3820, "type": "keydown", "key": "ArrowUp" },
+    { "t": 3840, "type": "keydown", "key": "ArrowUp" },
+    { "t": 3860, "type": "keydown", "key": "ArrowUp" }
+  ],
+  "checkpoints": [2000, 5000, 14000, 21000],
+  "_description": "A 'suicide burn': free-fall (no thrust) for the first 3.74s, then 7 discrete Up-arrow presses fired 20ms apart (each one +2250 thrust via increaseThrust(), reaching 15750 total) to decelerate sharply before touchdown. Timeline found by src/verify/design-soft-landing.mjs (idealized fixed-40ms-tick simulation of the reference physics.js, predicting ~0.58 m/s). An earlier 9-press/5.0s candidate (idealized prediction ~0.97 m/s) measured 2.05-2.06 m/s against the REAL rebuild in a browser - over the 2 m/s threshold - because real Playwright/CDP dispatch latency between 9 rapid keydown calls delays full thrust more than the idealized simulation accounts for (a systematic effect, not the random per-tick jitter an earlier +/-40%-jitter check had tested for). This 7-press/3.74s config was chosen by testing several candidates directly against the real rebuild and was then repeated 3x for consistency: measured 1.01, 0.96, 1.08 m/s across those 3 real runs, all comfortably softLanded - see docs/KIRO_NOTES.md for the full account of finding and fixing the first (too-marginal) candidate.",
+  "_expectedOutcome": "softLanded with a comfortable real-world margin (~1.0 m/s vs. the 2 m/s threshold, measured over 3 real runs). Angle stays 0 throughout since no Left/Right key is ever sent."
+}

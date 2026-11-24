@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RewriteOutput",
+  "description": "Stage 3 (Rewrite) output: generated files plus every gap-filling choice made while generating them. See types.ts's Assumption/RewriteOutput and rewriter.md requirement #7 - this exists so a Rewriter guess (e.g. clamping a negative setThrust() request to 0, which the BehaviorSpec never specified) is a recorded, reportable fact instead of a silent, undiscoverable one.",
+  "type": "object",
+  "required": ["files", "assumptions"],
+  "properties": {
+    "files": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "relative path -> full file contents"
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "choiceMade"],
+        "properties": {
+          "description": { "type": "string" },
+          "choiceMade": { "type": "string" },
+          "citation": { "type": "string" }
+        }
+      }
+    }
+  }
+}

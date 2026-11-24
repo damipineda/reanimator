@@ -1,0 +1,14 @@
+{
+  "id": "crash-tilt",
+  "viewport": { "width": 820, "height": 640 },
+  "events": [
+    { "t": 100, "type": "keydown", "key": "ArrowRight" },
+    { "t": 150, "type": "keydown", "key": "ArrowRight" },
+    { "t": 200, "type": "keydown", "key": "ArrowRight" },
+    { "t": 250, "type": "keydown", "key": "ArrowRight" },
+    { "t": 300, "type": "keydown", "key": "ArrowRight" }
+  ],
+  "checkpoints": [2000, 5000, 9000],
+  "_description": "Same free-fall as free-fall.json (no thrust input), but 5 early Right-arrow presses (each +3deg via angleRight(), all while still 'inFlight' since they happen in the first 300ms) tilt the lander to +15deg = 0.2618 rad, above the 0.2 rad landing-angle threshold. This tests the ANGLE-based disqualification path of the landing-classification rule, distinct from free-fall.json's speed-based disqualification (both end 'crashLanded', but for different reasons - this scenario's landing speed alone, at angle=0, would still exceed damageLandingSpeed, so this is a deliberately unambiguous positive-angle case, not a test of the asymmetric angle<0.2 quirk noted in docs/KIRO_NOTES.md (which specifically concerns NEGATIVE angles bypassing the check) - that quirk is documented but not covered by a dedicated scenario here, for time reasons.",
+  "_expectedOutcome": "crashLanded, destroyed (angle ~0.26 rad > 0.2 disqualifies softLanded/hardLanded regardless of speed; speed is still ~12.6+ m/s from the unmodified free-fall descent, so this would have been crashLanded on speed alone too - this scenario is about confirming the angle path is also wired correctly, not about producing a different outcome label)."
+}

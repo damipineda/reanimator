@@ -1,236 +1,221 @@
 // src/render.js
 //
-// Everything about the PER-RENDERED-FRAME tick (DoAction.as's updateGame),
-// which the BehaviorSpec documents as a separate update rate from the
-// 40ms physics tick in src/physics.js (rules: "Each rendered frame
-// (updateGame) ..."). Per rewriter.md requirement #5, this is why the
-// physics interval and the render loop are two separate, separately-named
-// loops in main.js rather than one requestAnimationFrame doing both.
-//
-// This module is split in two kinds of exports:
-//   - pure "camera" state transitions (numeric state that changes over
-//     time in response to input/position, so rewriter.md requirement #3
-//     says it must be a pure (state, ...args) -> newState function);
-//   - pure view-model builders that turn physics state into plain numbers
-//     for the screen (positions, rotations, percentages) - also pure, no
-//     DOM reads/writes;
-//   - one impure `paintFrame()` at the bottom that takes an already-built
-//     view model and writes it into the DOM. That function does not
-//     compute any new simulation state, it only presents numbers that were
-//     already decided, so it is the one allowed "impure" piece here.
+// DOM/visual layer. This is deliberately NOT one of the pure
+// "game/simulation logic" functions rewriter.md requirement #3 is about -
+// it only reads a physics.js state object and strings.json text and
+// pushes updates onto the page. It owns no simulation rules; every number
+// it displays was already computed by src/physics.js.
 
-export const PIX_PER_METER = 7; // DoAction.as:162-167,380
-export const RAD_TO_DEG = 180 / Math.PI;
+import {
+  RAD_TO_DEG,
+  MAX_THRUST,
+  DAMAGE_LANDING_SPEED,
+  worldToScreen,
+} from './physics.js';
 
-// PLACEHOLDER: the BehaviorSpec's notes say stage pixel dimensions come
-// from Util.STAGEW/Util.STAGEH and "their actual pixel values are unknown
-// since Util.as was not supplied". These numbers are therefore NOT from
-// the original simulation; they only exist so this rewrite has *some*
-// concrete viewport to render into. Treat them as freely adjustable.
-export const STAGE_W = 760;
-export const STAGE_H = 480;
+// DOM-only bookkeeping that is not part of the pure physics state: the
+// actual landing-mark <div> elements. physics.js only knows the *count*
+// (state.nbrLandings); this module turns that count into (or back out of)
+// real elements.
+let landingMarkEls = [];
 
-/**
- * DoAction.as:162-167,380 - lander position in meters converted to stage
- * pixels. y=0 (ground) maps to 90% of stage height.
- */
-export function landerScreenPosition(pos, stageH = STAGE_H) {
-  return {
-    x: pos.x * PIX_PER_METER,
-    y: 0.9 * stageH - pos.y * PIX_PER_METER,
-  };
+// Previous-frame bookkeeping used only to detect the inFlight -> landed
+// and landed -> inFlight (reset) transitions; not simulation state.
+let wasInFlight = true;
+
+export function applyStrings(dom, strings) {
+  dom.startButton.textContent = strings.startButtonLabel; // DoAction.as:40
+  dom.resetButton.textContent = strings.resetButtonLabel; // DoAction.as:41
+  dom.helpButton.textContent = strings.helpButtonLabel;
+  dom.heightLabel.textContent = strings.heightLabel;
+  dom.thrustLabel.textContent = strings.thrustLabel;
+  dom.rangeLabel.textContent = strings.rangeLabel;
+  dom.fuelLabel.textContent = strings.fuelLabel;
+  dom.vySpeedLabel.textContent = strings.verticalSpeedLabel;
+  dom.vxSpeedLabel.textContent = strings.horizontalSpeedLabel;
+  dom.scoreLabel.textContent = strings.scoreLabel;
+  dom.softLandingsLabel.textContent = strings.softLandingsLabel;
+  dom.hardLandingsLabel.textContent = strings.hardLandingsLabel;
+  dom.pausedSign.textContent = strings.pausedLabel;
+  dom.helpPlaque.textContent = strings.helpPlaqueText;
 }
 
-/**
- * DoAction.as:174-184 - camera zoom bookkeeping. This is the precisely
- * specified part (the 75%/5% thresholds and the *3 / /3 step, bounded by
- * Nmag in [-2, 1]); pure state transition per rewriter.md requirement #3.
- */
-export function stepCameraZoom(camera, landerScreenY, stageH = STAGE_H) {
-  let { mag, Nmag } = camera;
-  if (landerScreenY > 0.75 * stageH && Nmag < 1) {
-    mag = mag * 3;
-    Nmag = Nmag + 1;
-  } else if (landerScreenY < 0.05 * stageH && Nmag > -2) {
-    mag = mag / 3;
-    Nmag = Nmag - 1;
+// "ControlButton wires its clip's onRollOver to bold the label_txt and
+// onRollOut to unbold it; onPress nudges the clip +2,+2 pixels; onRelease
+// (and onReleaseOutside, aliased to the same handler) moves it back -2,-2
+// pixels and then invokes the constructor-supplied buttonAction callback."
+// (ControlButton.as:18-44)
+export function wireControlButton(el, action) {
+  el.addEventListener('mouseenter', () => el.classList.add('bold'));
+  el.addEventListener('mouseleave', () => {
+    el.classList.remove('bold');
+    el.classList.remove('nudged');
+  });
+  el.addEventListener('mousedown', () => el.classList.add('nudged'));
+  el.addEventListener('mouseup', () => {
+    el.classList.remove('nudged');
+    // "The Start button is constructed with action = null (so releasing
+    // it currently calls no function)" (DoAction.as:40-41) - the null
+    // check below reproduces that no-op literally.
+    if (typeof action === 'function') action();
+  });
+}
+
+// "angleLeft()/angleRight() always trigger the corresponding side-thruster
+// animation clip and side-thrust sound unless crashState == 'crashLanded'"
+// (Lander.as:233-260). This is purely visual (no audio asset is in scope
+// here - see ASSUMPTIONS block), implemented as a one-shot CSS animation.
+export function triggerSideThruster(dom, side) {
+  const el = side === 'left' ? dom.leftThruster : dom.rightThruster;
+  el.classList.remove('firing');
+  // eslint-disable-next-line no-unused-expressions
+  void el.offsetWidth; // restart the CSS animation
+  el.classList.add('firing');
+}
+
+// "On-screen lander rotation = myLander.angle * radToDeg; the thrust-flame
+// clip's vertical scale = 200 * (thrust/maxThrust) percent and its alpha =
+// 20 + 60 * (thrust/maxThrust)." (DoAction.as:194-198)
+// Damage frames: "good"/"bottomDamage"/"destroyed"/"rightDamage"/
+// "leftDamage" (DoAction.as:214-256, DoAction.as:282-313).
+function renderLander(state, dom) {
+  const screen = worldToScreen(state.pos);
+  dom.landerHolder.style.left = `${screen.x}px`;
+  dom.landerHolder.style.top = `${screen.y}px`;
+  dom.lander.style.transform = `rotate(${state.angle * RAD_TO_DEG}deg)`;
+
+  const thrustFraction = state.thrust / MAX_THRUST;
+  dom.thrustFlame.style.transform = `scaleY(${2 * thrustFraction})`; // 200% = scaleY(2)
+  dom.thrustFlame.style.opacity = String((20 + 60 * thrustFraction) / 100);
+
+  // NOTE: physics.detectBoulderCrash() is currently a disabled placeholder
+  // (see physics.js + ASSUMPTIONS), so state.boulderCrash never becomes
+  // true today; this branch is kept so the "rightDamage"/"leftDamage"
+  // frames from the BehaviorSpec are still represented structurally.
+  if (state.boulderCrash) {
+    dom.landerBody.dataset.frame = 'rightDamage';
   }
-  return { ...camera, mag, Nmag };
 }
 
-/**
- * DoAction.as:358-364 (resetView) and DoAction.as:186-193 (panning).
- *
- * APPROXIMATION, labeled per rewriter.md requirement #7: the BehaviorSpec
- * describes resetView() only as "centered horizontally on the lander", and
- * panning only as "reposition view_mc._x to keep the lander within [10%,
- * 90%] of stage width" - it does not give the literal pixel formula from
- * Util/view_mc internals. This reproduces the *described behavior*
- * (re-center/keep-within-band), not a verified byte-for-byte formula.
- */
-export function stepCameraPan(camera, landerScreenX, zoomChanged, stageW = STAGE_W) {
-  const { mag } = camera;
-  let viewX = camera.viewX;
+// "updateGauges(), run every frame, sets the artificial horizon's rotation
+// to angle*radToDeg, writes rounded height (pos.y) and thrust and range
+// (pos.x) values into their text fields, and calls the
+// fuelGauge_mc/vY_mc/vX_mc clips' own update() methods." (DoAction.as:204-213)
+function renderGauges(state, dom) {
+  dom.artificialHorizon.style.transform = `rotate(${state.angle * RAD_TO_DEG}deg)`;
+  dom.heightValue.textContent = String(Math.round(state.pos.y));
+  dom.thrustValue.textContent = String(Math.round(state.thrust));
+  dom.rangeValue.textContent = String(Math.round(state.pos.x));
+  dom.vyValue.textContent = state.velocity.y.toFixed(1);
+  dom.vxValue.textContent = state.velocity.x.toFixed(1);
 
-  if (zoomChanged) {
-    // resetView(): recenter horizontally on the lander at the new zoom.
-    viewX = stageW / 2 - landerScreenX * mag;
-  } else if (landerScreenX < 0.1 * stageW * mag) {
-    viewX = 0.1 * stageW * mag - landerScreenX * mag;
-  } else if (landerScreenX > 0.9 * stageW) {
-    viewX = 0.9 * stageW - landerScreenX * mag;
-  }
-
-  return { ...camera, viewX };
+  const INITIAL_FUEL = 816.5; // Lander.as:49-55 (kept local to avoid a second import cycle)
+  const fuelPct = clampPct((state.remainingFuel / INITIAL_FUEL) * 100);
+  dom.fuelGauge.style.width = `${fuelPct}%`;
 }
 
-/** DoAction.as:194-198 - lander rotation shown on screen. */
-export function rotationDegrees(angleRad) {
-  return angleRad * RAD_TO_DEG;
+function clampPct(value) {
+  return Math.max(0, Math.min(100, value));
 }
 
-/** DoAction.as:406-407 - thrust flame grows/brightens with thrust. */
-export function flameVisual(thrust, maxThrust) {
-  const pct = thrust / maxThrust;
-  return {
-    yscalePercent: 200 * pct,
-    alphaPercent: 20 + 60 * pct,
-  };
+// "updateGame() rescales the camera (mag) ... and pans view_mc
+// horizontally ..." (DoAction.as:162-193). mag/Nmag/viewOffsetX are
+// computed by the pure physics.updateCamera(); this just applies them.
+function renderCamera(state, dom) {
+  dom.view.style.transform = `translateX(${state.viewOffsetX}px) scale(${state.mag})`;
 }
 
-/**
- * DoAction.as:199-201,262-281 - velocity/acceleration arrow geometry. Per
- * the BehaviorSpec, velAccArrows_mc is hidden and arrowsShown=false at
- * init, and NOTHING in the given files ever sets arrowsShown=true (no
- * documented key/button toggles it). This function is provided so the
- * numbers are available if a toggle is ever added, but main.js never
- * calls it with arrowsShown=true today - the arrows stay hidden, matching
- * the spec, not inventing a control for them.
- */
-export function arrowVisual(vector) {
-  const magnitude = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
-  return {
-    widthPx: 15 * magnitude,
-    heightPx: 0.25 * 15 * magnitude,
-    rotationDeg: -RAD_TO_DEG * Math.atan2(vector.y, vector.x),
-  };
-}
-
-/**
- * DoAction.as:204-213 - HUD numeric read-outs.
- *
- * fuelGauge_mc/vY_mc/vX_mc are updated via their own .update() methods
- * that "were not provided" per the BehaviorSpec notes, so their fuel/vY/vX
- * values are returned here as plain numbers for a labeled placeholder
- * gauge in the DOM, not as a reproduction of the original gauge widget.
- */
-export function hudReadouts(lander) {
-  return {
-    horizonRotationDeg: rotationDegrees(lander.angle),
-    heightM: Math.round(lander.pos.y),
-    thrustReadout: Math.round(lander.thrust),
-    rangeM: Math.round(lander.pos.x),
-    fuelPlaceholder: Math.round(lander.remainingFuel),
-    vYPlaceholder: Math.round(lander.velocity.y),
-    vXPlaceholder: Math.round(lander.velocity.x),
-  };
-}
-
-/**
- * DoAction.as:214-256 - landing report message/body-frame selection once a
- * landing has been classified. `strings` is the loaded strings.json
- * object (rewriter.md requirement #2: no user-visible text inline here).
- */
-export function landingReport(crashState, landingSpeed, strings) {
-  const roundedSpeed = Math.round(landingSpeed * 10) / 10;
-  const message1 = strings.landingReport.speedTemplate.replace("{speed}", roundedSpeed.toFixed(1));
+// "detectLanding(), run every frame: when crashState first leaves
+// 'inFlight' after being flagged landed ... shows landingSpeedReport_mc
+// with message1_txt = landingSpeed_str + (landing speed rounded to 1
+// decimal) + ' m/s', and sets message2_txt to softLanding_str,
+// hardLanding_str, crashDamaged_str, or crashKilled_str depending on
+// crashState (the damaged/killed split is decided by comparing the
+// rounded landing speed string to myLander.damageLandingSpeed) ...
+// message3_txt/message4_txt are set from
+// myScoreKeeper.nbrSoftLandings/nbrHardLandings." (DoAction.as:214-256)
+function showLandingReport(state, dom, strings) {
+  dom.landingSpeedReport.hidden = false;
+  const roundedSpeed = state.landingSpeed.toFixed(1);
+  dom.message1.textContent = `${strings.landingSpeed_str}${roundedSpeed}${strings.landingSpeedUnitSuffix}`;
 
   let message2;
-  let bodyFrame;
-  if (crashState === "softLanded") {
-    message2 = strings.landingReport.softLanding;
-    bodyFrame = "good";
-  } else if (crashState === "hardLanded") {
-    message2 = strings.landingReport.hardLanding;
-    bodyFrame = "good";
-  } else if (Math.round(landingSpeed) <= 12) {
-    // DAMAGE_LANDING_SPEED threshold, see physics.js - only used for this
-    // crashed-message split, per the BehaviorSpec's notes.
-    message2 = strings.landingReport.crashDamaged;
-    bodyFrame = "bottomDamage";
+  if (state.crashState === 'softLanded') {
+    message2 = strings.softLanding_str;
+  } else if (state.crashState === 'hardLanded') {
+    message2 = strings.hardLanding_str;
   } else {
-    message2 = strings.landingReport.crashKilled;
-    bodyFrame = "destroyed";
+    // ASSUMPTION: the damaged/killed split compares the already-rounded
+    // (1-decimal) landing speed against DAMAGE_LANDING_SPEED(12) using a
+    // strict "<" (damaged below 12, killed at/above 12), mirroring the
+    // "<" used by the soft/hard thresholds. See ASSUMPTIONS block.
+    const damaged = Number(roundedSpeed) < DAMAGE_LANDING_SPEED;
+    message2 = damaged ? strings.crashDamaged_str : strings.crashKilled_str;
+    dom.landerBody.dataset.frame = damaged ? 'bottomDamage' : 'destroyed';
   }
+  dom.message2.textContent = message2;
+  dom.message3.textContent = `${strings.softLandingsLabel}: ${state.nbrSoftLandings}`;
+  dom.message4.textContent = `${strings.hardLandingsLabel}: ${state.nbrHardLandings}`;
 
-  return { message1, message2, bodyFrame };
+  if (state.crashState !== 'crashLanded') {
+    dom.landerBody.dataset.frame = 'good';
+  }
 }
 
-/**
- * Impure: writes an already-computed view model into the DOM. Does not
- * decide any new simulation state - everything it reads was already
- * computed by the pure functions above or by physics.js.
- */
-export function paintFrame(dom, strings, viewModel) {
-  const { lander, camera, ui, screenPos, flame, hud } = viewModel;
+// "attaches a numbered landingMark clip at the touchdown point"
+// (DoAction.as:214-256).
+function addLandingMark(state, dom) {
+  const mark = document.createElement('div');
+  mark.className = 'landing-mark';
+  mark.textContent = String(state.nbrLandings);
+  mark.style.left = `${worldToScreen(state.pos).x}px`;
+  dom.landingMarksLayer.appendChild(mark);
+  landingMarkEls.push(mark);
+}
 
-  dom.view.style.transform = `translateX(${camera.viewX}px) scale(${camera.mag})`;
+// "reset() ... removes every attached landingMark clip and resets
+// nbrLandings to 0" (DoAction.as:338-357,139-142).
+function syncLandingMarksOnReset(state, dom) {
+  if (state.nbrLandings === 0 && landingMarkEls.length > 0) {
+    landingMarkEls.forEach((el) => el.remove());
+    landingMarkEls = [];
+  }
+}
 
-  dom.landerHolder.style.left = `${screenPos.x}px`;
-  dom.landerHolder.style.top = `${screenPos.y}px`;
-  dom.landerBody.style.transform = `rotate(${rotationDegrees(lander.angle)}deg)`;
-  dom.landerBody.dataset.frame = ui.bodyFrame;
+export function renderFrame(state, dom, strings) {
+  renderLander(state, dom);
+  renderGauges(state, dom);
+  renderCamera(state, dom);
 
-  dom.thrustFlame.style.transform = `scaleY(${flame.yscalePercent / 100})`;
-  dom.thrustFlame.style.opacity = String(flame.alphaPercent / 100);
+  // "Whenever myLander.boulderCrash is true, boulderCrashReport_mc is
+  // made visible." (DoAction.as:257-260)
+  dom.boulderCrashReport.hidden = !state.boulderCrash;
 
-  dom.horizon.style.transform = `rotate(${hud.horizonRotationDeg}deg)`;
-  dom.heightReadout.textContent = String(hud.heightM);
-  dom.thrustReadout.textContent = String(hud.thrustReadout);
-  dom.rangeReadout.textContent = String(hud.rangeM);
-  dom.fuelGauge.textContent = `${hud.fuelPlaceholder} (${strings.hud.placeholderGauge})`;
-  dom.vYGauge.textContent = `${hud.vYPlaceholder} (${strings.hud.placeholderGauge})`;
-  dom.vXGauge.textContent = `${hud.vXPlaceholder} (${strings.hud.placeholderGauge})`;
+  dom.pausedSign.hidden = !state.motionPaused;
+  dom.helpPlaque.hidden = !state.helpPlaqueVisible;
+  dom.helpButton.classList.toggle('paused-icon', state.motionPaused);
 
-  // scoreReadout: ScoreKeeper internals were "not provided" per the
-  // BehaviorSpec notes, so no numeric score is invented here - the field
-  // just states that plainly, plus the one count the spec does give us
-  // (nbrLandings).
-  dom.scoreReadout.textContent = strings.score.placeholderTemplate
-    .replace("{landings}", String(ui.nbrLandings));
+  // "scoreReadout_mc score_txt: updated on init, on landing, and on
+  // reset." (outputs)
+  dom.scoreValue.textContent = String(state.score);
+  dom.softLandingsValue.textContent = String(state.nbrSoftLandings);
+  dom.hardLandingsValue.textContent = String(state.nbrHardLandings);
 
-  dom.pausedSign.hidden = !ui.motionPaused;
-  dom.helpPlaque.hidden = !ui.helpOpen;
+  const justLanded = wasInFlight && state.crashState !== 'inFlight';
+  const justReset = !wasInFlight && state.crashState === 'inFlight';
 
-  dom.landingSpeedReport.hidden = !ui.showLandingReport;
-  if (ui.showLandingReport && ui.landingReport) {
-    dom.landingMessage1.textContent = ui.landingReport.message1;
-    dom.landingMessage2.textContent = ui.landingReport.message2;
-    dom.landingMessage3.textContent = strings.landingReport.softCountTemplate.replace(
-      "{count}",
-      String(ui.nbrSoftLandings)
-    );
-    dom.landingMessage4.textContent = strings.landingReport.hardCountTemplate.replace(
-      "{count}",
-      String(ui.nbrHardLandings)
-    );
+  if (justLanded) {
+    showLandingReport(state, dom, strings);
+    addLandingMark(state, dom);
+  }
+  // "When crashState returns to 'inFlight' after having been landed, the
+  // boulder-crash and landing-speed report panels are hidden again."
+  // (DoAction.as:216-221)
+  if (justReset) {
+    dom.landingSpeedReport.hidden = true;
   }
 
-  dom.boulderCrashReport.hidden = !lander.boulderCrash;
+  syncLandingMarksOnReset(state, dom);
 
-  dom.velAccArrows.hidden = !ui.arrowsShown; // always true today, see arrowVisual() comment above
-
-  // Landing marks: one DOM node per past landing. 0.38*landerBody height is
-  // listed by the BehaviorSpec as an offset from the lander position, but
-  // the body's real pixel height is a library-asset value "not included
-  // here" - LANDING_MARK_Y_OFFSET_PLACEHOLDER below stands in for it.
-  const LANDING_MARK_Y_OFFSET_PLACEHOLDER = 12;
-  dom.landingMarksLayer.innerHTML = "";
-  for (const mark of ui.landingMarks) {
-    const el = document.createElement("div");
-    el.className = "landing-mark";
-    el.style.left = `${mark.x}px`;
-    el.style.top = `${mark.y + LANDING_MARK_Y_OFFSET_PLACEHOLDER}px`;
-    dom.landingMarksLayer.appendChild(el);
-  }
+  wasInFlight = state.crashState === 'inFlight';
 }

@@ -16,7 +16,9 @@ commentary outside the JSON):
   "state": [{ "name": "string", "type": "string", "description": "string" }],
   "rules": [{ "description": "string", "citation": "file.as:lineStart-lineEnd" }],
   "outputs": [{ "name": "string", "description": "string" }],
-  "notes": ["string"]
+  "notes": ["string"],
+  "literalStrings": [{ "name": "string (the source variable this is assigned to)", "value": "string (the exact literal text, verbatim)", "citation": "file.as:line" }],
+  "assumptions": [{ "description": "string (what was unspecified)", "choiceMade": "string (the concrete value/behavior you chose)", "citation": "string (optional)" }]
 }
 ```
 
@@ -36,3 +38,18 @@ commentary outside the JSON):
 5. Do not reference or assume the existence of any other implementation,
    reference rebuild, or prior analysis of this simulation. Work only from
    the ActionScript given to you in this conversation.
+6. `literalStrings` is REQUIRED, not optional: every literal string
+   constant in the given source that is shown to the user (button labels,
+   messages, HUD labels - look for `var someName_str = "...";` and
+   similar patterns) must get its own entry, with the EXACT text quoted
+   verbatim and a citation. If a `rules` entry mentions a string by its
+   source variable name (e.g. "shows `softLanding_str`"), that string's
+   literal text must ALSO appear in `literalStrings` - do not describe a
+   string by name only and leave its actual wording out.
+7. `assumptions` is for the rare case where YOU had to resolve a gap with
+   a concrete choice instead of citing a fact. Prefer putting an open
+   question in `notes` instead whenever the question can be left open for
+   a later stage to decide - `assumptions` is only for choices you
+   actually had to make to produce this spec at all (e.g. choosing which
+   of two conflicting definitions to trust). It is normal for this array
+   to be empty.

@@ -387,6 +387,217 @@ verified-at-runtime equivalence claim.
 
 ---
 
+## Phase 1 continued: Verifier (Step 3), property tests + hook (Step 4)
+
+### Contract change: `literalStrings` + `assumptions`, and a real re-run
+
+Added two fields to `BehaviorSpec` (`src/contracts/types.ts`,
+`behavior-spec.schema.json`) plus a new `RewriteOutput` contract
+(`rewrite-output.schema.json`): `literalStrings` (literal source-code
+strings, quoted verbatim with a citation - fixes the earlier finding that
+the Analyzer could cite a string by variable name without ever quoting its
+text) and `assumptions` (`{description, choiceMade, citation?}` - a
+structured record of every gap a stage filled with a concrete choice
+instead of leaving it as an open question). Updated `analyzer.md` and
+`rewriter.md` to require populating these, with `rewriter.md` requirement
+#8 spelling out the exact case that slipped through last time: *"if a rule
+only describes some branches of a conditional ... treat the missing branch
+as UNSPECIFIED ... do not assume it means 0/false/no-op without recording
+that choice."*
+
+Re-ran both stages fresh (same 4 source files) against the updated
+prompts. Verified result: the Rewriter made the **same** choice as before
+for negative `setThrust()` requests (clamp to 0) - but this time it is
+entry #1 of 14 in a structured, saved
+`src/rewrite/fresh-session-2026-11-16/rewriter-output/assumptions.json`,
+not a choice buried only in a code comment. The other 13 assumptions cover
+things like: dt's unit (seconds, inferred - the rule never states units),
+whether the physics tick freezes once landed (yes - nothing in the rule
+says so explicitly, but not freezing it would let the ground-clamp
+immediately satisfy "pos.y>=0" and silently restart the fall), boulder
+geometry (disabled placeholder, geometry unavailable), stage pixel
+dimensions (placeholder 800x600, flagged), camera zoom direction (inferred
+from "landing needs detail," not stated), help-plaque scope (tied only to
+the Help-button pause path, not the P-key path), and missing audio
+(explicitly not implemented, flags tracked but unused). This is the fix
+for the exact gap the first comparison found: *"the one place the Rewriter
+silently guessed instead of flagging the gap."*
+
+### Real bug found: the reference rebuild had never actually been run in a browser
+
+Building the verifier's `run-rebuild.mjs` (serves
+`src/rewrite/reference/lunar-lander/` and loads it in real Playwright)
+failed immediately: `strings.js`'s `loadStrings('/strings.json')` 404'd.
+`strings.json` had landed one directory **above** `index.html`
+(`src/rewrite/reference/strings.json`, alongside the Markdown reports)
+when the reference was moved into `src/` last session, instead of next to
+`index.html` where the app actually fetches it from. The whole Stage
+1-3 build was unit-tested (38 `vitest` tests on `physics.js`/`score.js`)
+but **never once loaded as a live page** until this verifier work tried
+to - the unit tests don't touch `index.html` or `strings.json` at all.
+Fixed by copying `strings.json` next to `index.html`
+(`src/rewrite/reference/lunar-lander/strings.json`). Lesson: a green unit
+test suite is not the same claim as "the app runs," and this project's own
+"measured, not claimed" principle means an actual browser load should have
+been part of Stage 1's own exit criteria, not deferred to Stage 4.
+
+### Scenarios + real comparison (free-fall, soft-landing, crash-tilt)
+
+Built `src/verify/`: a minimal static file server (no new dependency),
+`ruffle-helpers.mjs` + `ocr.mjs` (ported from the Phase 0 spike at
+`work/lunar-lander/compare/`, calibration unchanged), `run-rebuild.mjs`
+(reads exact state via `window.__reanimator.getState()`) and
+`run-original.mjs` (OCR on screenshots - the SWF has no JS bridge), and
+`verify.mjs` (orchestrator). Discovered the self-hosted Ruffle build
+needs its two `.wasm` files alongside `ruffle.js`, not just the `.js`
+itself (`local-samples/ruffle/` now holds all three, gitignored like the
+SWF). 3 scenarios, each with a scripted key timeline, committed under
+`scenarios/lunar-lander/` (per `structure.md`'s documented layout):
+
+- **`free-fall`**: no input. Re-runs Phase 0's own free-fall comparison
+  through the formal harness instead of its ad hoc scripts.
+- **`soft-landing`**: a scripted "suicide burn" (free-fall then 7 discrete
+  Up-arrow presses). The exact timing was tuned twice: an idealized,
+  browser-free simulation (`design-soft-landing.mjs`, using the reference
+  `physics.js` directly) first suggested a 9-press/5.0s burn predicting
+  ~0.97 m/s - but the REAL rebuild, run in an actual browser, landed at
+  **2.05-2.06 m/s** (over the 2 m/s soft-landing threshold) in that
+  configuration, because real Playwright/CDP dispatch latency between 9
+  rapid keydown calls delays full thrust more than the idealized
+  fixed-tick simulation accounts for (a systematic effect an earlier
+  +/-40%-random-jitter robustness check did not model, since it only
+  models per-tick noise). Re-tuned to a 7-press/3.74s burn by testing
+  several candidates directly against the real rebuild; the winner was
+  repeated 3x for consistency (1.01, 0.96, 1.08 m/s - all comfortably
+  `softLanded`).
+- **`crash-tilt`**: the same free-fall, but 5 early Right-arrow presses
+  tilt the lander past the 0.2 rad landing-angle threshold before it ever
+  starts descending meaningfully, testing the ANGLE-disqualification path
+  of the landing rule specifically (distinct from `free-fall`'s
+  speed-only disqualification), even though both end up `crashLanded` for
+  the OCR/UI to observe.
+
+**Real run (3x original via Ruffle+OCR, 1x rebuild via exact state) -
+overall verdict: PASS.** `free-fall` and `crash-tilt` matched exactly
+(original and rebuild both read 12.7 m/s landing speed, range 45m, all 3
+original runs identical to the OCR's own 1-decimal precision).
+`soft-landing` passed on the category check (did it land? yes, both
+sides) and range, but its landing-speed comparison is **NON_COMPARABLE**:
+the landing-message OCR crop was calibrated against the original's
+*crash* message layout (`"keyNotFound<speed> m/s"`); a soft/hard-landing
+message renders differently and OCR returned garbled text
+(e.g. `"- KEE"`), not a parseable number - a genuine, newly-found
+calibration gap in the OCR method, reported rather than hidden. In one
+earlier test iteration of this exact scenario (before the final tuning
+pass above), the original had not yet landed - still slowly ascending -
+at the same checkpoint where the rebuild had already landed softly: this
+specific scripted burn sits close enough to a decision boundary that real
+wall-clock scheduling variance between the native-JS rebuild and the
+WASM-emulated original can occasionally put the two sides on different
+sides of "has it landed yet" at one fixed checkpoint time, even though
+both sides' underlying physics eventually produce a soft landing. The
+canonical recorded run did not hit that edge case, but it is a real,
+reproducible risk specific to tightly-timed scripted scenarios, not a
+hypothetical one - and is reported as such rather than smoothed over by
+re-running until a clean result appeared.
+
+Full numbers, per-scenario tables, the scripted key timelines, and the
+recorded assumptions are in `docs/verifier-report.html` (generated by
+`src/verify/report.mjs` from `work/verify-results/*.json` - the raw
+results, including screenshot paths of the SWF, stay in `work/`,
+gitignored; the committed HTML report itself embeds no images, only
+derived numbers/text).
+
+### Mutation test (the demo headline)
+
+Does this verifier actually catch a real bug, or does it only ever pass
+because nothing has been wrong yet? `src/verify/mutation-test.mjs` copies
+the reference rebuild, re-injects the EXACT "fuel-clamp ordering" bug
+found in the first fresh-session Rewriter test (`currentMass` computed
+AFTER clamping `remainingFuel` to 0, instead of before - see this file's
+earlier comparison section), and re-runs `free-fall` against both the
+mutant and the untouched reference.
+
+**Result, measured not assumed: the verifier does NOT catch this bug.**
+Correct build lands at 12.6832 m/s; mutant lands at 12.6784 m/s - a
+difference of **0.0048 m/s**, versus the original's own measured spread of
+12.7-12.7 m/s (1-decimal display precision). Both the correct build and
+the mutant read as "12.7" and both fall inside the original's spread.
+Hand-computed earlier (before this real run) why: the bug's effect on
+`currentMass` is a one-tick, ~0.004% relative perturbation, and
+`currentMass` is never itself a displayed quantity in either the original
+or the rebuild's UI - only derived velocity/position, far below the
+original's 1-decimal display precision, carry any trace of it at all.
+**This is a real, measured limit of a screenshot/state-comparison verifier
+at this tolerance**, not a claim that the verifier is broken: it DOES
+catch categorical and constant-level divergences (`free-fall`/`crash-tilt`
+above; the earlier fresh-session finding where one dropped rule broke
+re-ignition-after-landing entirely). Notably, re-running `vitest` against
+the mutated copy's own unit tests (`physics.test.mjs`, copied alongside
+`physics.js` by the mutation script) **does** immediately fail one
+assertion (`forces thrust to 0 and remainingFuel to 0 ... expected 6839 to
+be close to 6838.509...`) - the exact test that caught this bug the first
+time it was written. The honest conclusion: a hand-written unit test with
+a precise expected value catches this; a behavioral/visual verifier
+comparing only externally observable outcomes, at any tolerance coarse
+enough to tolerate the original's own 1-decimal display, structurally
+cannot. Both are real tools with different, now-measured reach, not one
+"better" than the other.
+
+### Property tests (3, `fast-check`, under top-level `tests/`)
+
+1. **`tests/fuel-never-negative.property.test.mjs`** - for any sequence of
+   up to 200 (requested thrust, tick duration) pairs, `remainingFuel` is
+   never negative after `evolveOneTimeStep()`. Deliberately does NOT also
+   assert `currentMass >= massEmpty`, since that would incorrectly flag
+   the real, faithfully-reproduced one-tick quirk the mutation test above
+   measures.
+2. **`tests/verdict-monotonicity.property.test.mjs`** - design.md property
+   6: adding a `FAIL` (or `NON_COMPARABLE`) `VerifyResult` to any existing
+   set never improves the `Verdict` computed by the actual
+   `computeVerdict()` the verifier uses, not a reimplementation of it.
+3. **`tests/scenario-roundtrip.property.test.mjs`** - design.md property
+   2: `JSON.parse(JSON.stringify(scenario))` deep-equals the original for
+   generated Scenario-shaped objects (and twice in a row, for
+   idempotence), AND still validates against the real
+   `scenario.schema.json` shape; also directly checks the 3 real committed
+   scenario files, not only generated ones.
+
+Added `vitest.config.mjs` excluding `work/**` and `local-samples/**` from
+test discovery - needed because the mutation test's temporary copy
+(`work/mutation-test/...`) includes its own `physics.test.mjs`, which
+`vitest`'s default file scan picked up and (correctly) failed against the
+injected bug, polluting `npm test`'s output with a scratch artifact's
+result. 43 tests pass cleanly with the exclusion in place.
+
+### Hook
+
+`.kiro/hooks/rerun-tests-on-pipeline-change.json` (PostFileSave, matcher
+on `src/(rewrite|prompts)/`): runs `npx vitest run` and logs to
+`work/hook-test-output.log` on every save under `src/rewrite/` or
+`src/prompts/`, per design.md's stated plan ("a hook re-runs the verifier
+on all samples whenever src/rewrite/ or src/prompts/ changes"). Scoped to
+the fast unit/property suite, not the full `src/verify/verify.mjs`,
+because the full verifier needs `local-samples/lunar-lander.swf` and
+`local-samples/ruffle/` present, which is not guaranteed on every machine
+(the repo must work without them, per the Nov 15 instruction) - running
+the full Playwright+Ruffle+OCR pass is a manual step
+(`node src/verify/verify.mjs`), not an automatic one. Also noting a tool
+limitation hit while creating this: `PostFileSave` hook output is not
+forwarded back into the conversation (only `SessionStart`/
+`UserPromptSubmit`/`PreTaskExec`/`PreCompact`/`PostCompact` are, per the
+hook tool's own documentation) - so this hook's value is "fails loudly in
+its own log for a human to check," not "reports back to the agent
+automatically." Separately, the hook-creation tool itself initially wrote
+the hook file one directory **above** this repository
+(`Reanimator/.kiro/hooks/` instead of `Reanimator/reanimator-kiro/.kiro/hooks/`)
+- moved it into the repo manually and verified it landed under version
+control; worth double-checking after any future `createHook` call in this
+environment rather than assuming the path matches the rest of this
+session's file operations.
+
+---
+
 ## Kiro Usage Patterns
 
 ### Specs vs Vibe Coding

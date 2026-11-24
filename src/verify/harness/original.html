@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Reanimator verifier: original (Ruffle)</title>
+<style>
+  /* Forced to 800x600, no page padding, so container top-left is exactly
+     the page/viewport origin (0,0) - avoids any ambiguity about where
+     the SWF's own (x,y) coordinate space lands in page coordinates, so
+     scripted click/mouse coordinates in a Scenario map 1:1 onto it. */
+  body { margin: 0; background: #000; }
+  #container { width: 800px; height: 600px; }
+</style>
+</head>
+<body>
+  <div id="container"></div>
+  <!-- Self-hosted Ruffle build, local-only (see src/verify/config.mjs,
+       RUFFLE_JS_PATH) - this server is rooted at the repo root, so this
+       is an absolute, repo-root-relative path. -->
+  <script src="/local-samples/ruffle/ruffle.js"></script>
+  <script>
+    window.__ready = false;
+    window.addEventListener("DOMContentLoaded", async () => {
+        const ruffle = window.RufflePlayer.newest();
+        const player = ruffle.createPlayer();
+        player.style.width = "800px";
+        player.style.height = "600px";
+        document.getElementById("container").appendChild(player);
+        window.__playerEl = player;
+        await player.load("/local-samples/lunar-lander.swf");
+        window.__ready = true;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Re-run tests when rewrite/ or prompts/ change",
+      "trigger": "PostFileSave",
+      "description": "design.md's verifier design calls for re-running the verifier whenever src/rewrite/ or src/prompts/ changes, since those are exactly the stages a behavior/prompt edit could silently break. The full Playwright+Ruffle verifier (src/verify/verify.mjs) needs local-only assets (local-samples/lunar-lander.swf, local-samples/ruffle/) that are not guaranteed present on every machine, so this hook runs the fast, dependency-free unit + property test suite (vitest) instead on every save under src/rewrite/ or src/prompts/, and logs the result to work/hook-test-output.log (gitignored) for inspection. Run `node src/verify/verify.mjs` manually for the full behavioral comparison once local-samples/ is populated.",
+      "matcher": "src[\\\\/](rewrite|prompts)[\\\\/]",
+      "action": {
+        "type": "command",
+        "command": "npx vitest run > work/hook-test-output.log 2>&1",
+        "timeout": 60
+      }
+    }
+  ]
+}
