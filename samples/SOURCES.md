@@ -20,36 +20,31 @@ the public history. See `docs/KIRO_NOTES.md` for the record of that correction.
 
 ## Phase 5 (public demo candidates - pending confirmation, NOT yet committed)
 
-## Committed sample: Lunar Lander (PhET) — decision recorded 2026-11-15
+## Lunar Lander (PhET) — decision recorded 2026-11-15: NOT committed
 
-**Decision:** proceeding under CC BY 3.0 (Option A) without contacting PhET first. Recorded
-here as an explicitly accepted risk by the project owner, per this file's own promotion
-rule (criterion 4 below). Reasoning: Option B ("parties wishing to modify the source code")
-targets people who have access to and modify PhET's *published* source (true for their
-modern HTML5 sims on GitHub); PhET never published source for this legacy Flash sim, so
-Option B's mechanism is not available to us at all - only the compiled executable exists,
-and CC BY 3.0 (Option A) covers it directly. CC BY is a permissive license by design: it
-does not require asking the licensor first. Residual risk not eliminated by this reasoning:
-(a) the archive.org copy's authenticity is still not provable by hash against an official
-PhET copy (see "Authenticity check performed" below - circumstantial, not certain), (b) a
-different reading of Option A/B could exist that we have not had a lawyer confirm. Both are
-accepted as low-probability, disclosed risks for a credited, non-commercial student project.
+**Decision (revised 2026-11-15):** `lunar-lander.swf` is **not committed to this repo and
+never will be without a separate, explicit decision**. Its provenance (community upload to
+archive.org, not an official PhET copy - see "Authenticity check" below) and its exact
+license path (Option A vs B, see the research further down this file) are **not
+confirmed**, and the project is proceeding without resolving either. Running the pipeline
+against this sample is a **local-only, judge/developer-provided-file workflow**:
 
-**Obligations this decision does NOT waive** (CC BY 3.0 requirements, independent of
-whether PhET replies to anything):
+1. Download the file yourself from archive.org (link and SHA-256 below) - we do not
+   redistribute it.
+2. Place it at `local-samples/lunar-lander.swf` (gitignored, never committed).
+3. Point the pipeline/demo at that path. The repo and its public demo work without this
+   file present; samples requiring it are simply unavailable until you provide it.
+
+This supersedes the 2026-11-15 "accepted risk, proceed under Option A" note that was
+recorded earlier the same day - that reasoning is left below for the record, but the
+decision was changed before anything was committed.
+
+**If this project is ever submitted/published with this sample included**, the CC BY 3.0
+obligations below still apply regardless of which option governs:
 1. Attribution, verbatim, wherever the rebuild is shown: "PhET Interactive Simulations /
    University of Colorado / https://phet.colorado.edu"
-2. A visible notice that the work has been modified (CC BY 3.0 legal code requirement, not
-   optional) - e.g. "This is a Reanimator-built reconstruction, not the original PhET file."
-3. Both of the above must appear in the equivalence report and the web UI once built
-   (Requirement 9.2) - not yet built as of this note.
-
-**Manual step still required** (Kiro's tooling blocked an automated copy from `work/` into
-this folder - by design, for exactly this kind of file): copy the verified file yourself:
-```
-Copy-Item "work\phet-verify\lunar-lander.swf" "samples\lunar-lander.swf"
-```
-Then `git add samples/lunar-lander.swf samples/SOURCES.md && git commit`.
+2. A visible notice that the work has been modified.
+Neither is implemented yet (no web UI exists).
 
 ### Candidate 1: Lunar Lander (PhET)
 - **Author:** PhET Interactive Simulations, University of Colorado Boulder
