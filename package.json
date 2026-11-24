@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "description": "Convert ActionScript SWFs to HTML5/JS and verify equivalence",
   "type": "module",
+  "bin": {
+    "reanimator": "bin/reanimator.mjs"
+  },
   "scripts": {
+    "convert": "node bin/reanimator.mjs convert",
     "test": "vitest",
     "task-0.3": "node src/tasks/task-0.3.mjs"
   },

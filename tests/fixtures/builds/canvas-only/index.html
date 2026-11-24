@@ -1,0 +1,8 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>canvas fixture</title></head>
+<body><canvas id="c" width="400" height="300"></canvas>
+<script>
+  const g = document.getElementById('c').getContext('2d');
+  g.fillStyle = '#888'; g.fillRect(0, 0, 400, 300);
+  g.fillStyle = '#fff'; g.font = '20px sans-serif'; g.fillText('Landing speed = 3 m/s  Soft Landing.', 10, 50);
+</script></body></html>

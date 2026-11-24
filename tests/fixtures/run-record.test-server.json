@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "input": {
+    "file": "toy-simulation.swf",
+    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "bytes": 48213
+  },
+  "startedAt": "2030-03-04T12:00:00.000Z",
+  "finishedAt": "2030-03-04T12:00:09.000Z",
+  "wallSeconds": 9,
+  "config": {
+    "provider": "openai-compatible",
+    "model": "fixture-v1",
+    "baseUrlHost": "127.0.0.1:8787",
+    "providerKind": "local-test-server",
+    "promptHashes": {
+      "analyzer.md": "aaaa111122223333444455556666777788889999aaaabbbbccccddddeeeeffff",
+      "rewriter.md": "bbbb111122223333444455556666777788889999aaaabbbbccccddddeeeeffff"
+    },
+    "maxRepairAttempts": 2
+  },
+  "stages": [
+    { "name": "extract", "status": "ok", "ms": 700, "detail": "Extracted 2 script files." },
+    { "name": "analyzer", "status": "ok", "ms": 50, "detail": "Fixture BehaviorSpec returned by the test server." },
+    { "name": "rewriter", "status": "ok", "ms": 60, "detail": "Fixture build returned by the test server." },
+    { "name": "loadCheck", "status": "ok", "ms": 2500, "detail": "Loaded on the first attempt." },
+    { "name": "verify", "status": "skipped", "ms": 0, "detail": "Skipped: no scenarios exist for this input." },
+    { "name": "report", "status": "ok", "ms": 15, "detail": "Wrote report.html." }
+  ],
+  "llm": {
+    "calls": [
+      {
+        "stage": "analyzer",
+        "key": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        "cached": false,
+        "provider": "openai-compatible",
+        "model": "fixture-v1",
+        "inputTokens": 10,
+        "outputTokens": 20,
+        "ms": 40,
+        "createdAt": "2030-03-04T12:00:02.000Z"
+      },
+      {
+        "stage": "rewriter",
+        "key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "cached": false,
+        "provider": "openai-compatible",
+        "model": "fixture-v1",
+        "inputTokens": 30,
+        "outputTokens": 40,
+        "ms": 45,
+        "createdAt": "2030-03-04T12:00:03.000Z"
+      }
+    ],
+    "totals": {
+      "liveCalls": 2,
+      "cachedCalls": 0,
+      "liveInputTokens": 40,
+      "liveOutputTokens": 60,
+      "savedInputTokens": 0,
+      "savedOutputTokens": 0,
+      "estimatedCostUsd": null,
+      "priceConfigured": false
+    }
+  },
+  "analyzer": {
+    "inputFiles": ["scripts/Toy.as", "scripts/Ui.as"],
+    "inputChars": 2048,
+    "spec": {
+      "title": "Toy Simulation (test fixture)",
+      "inputs": [],
+      "state": [
+        { "name": "counter", "type": "number", "description": "A counter." }
+      ],
+      "rules": [
+        { "description": "The counter goes up by one each tick.", "citation": "Toy.as:1-2" }
+      ],
+      "outputs": [],
+      "notes": [],
+      "literalStrings": [],
+      "assumptions": []
+    }
+  },
+  "rewriter": {
+    "files": [
+      { "path": "index.html", "bytes": 300 }
+    ],
+    "assumptions": [],
+    "buildDir": "work/runs/test-server/build"
+  },
+  "loadCheck": {
+    "attempts": [
+      { "attempt": 1, "ok": true, "errors": [], "warnings": [] }
+    ],
+    "finalOk": true
+  },
+  "verification": {
+    "status": "SKIPPED",
+    "reason": "No scenarios exist for this input.",
+    "scenarios": []
+  },
+  "distance": {
+    "headline": "The output was not compared with the original: no scenarios exist for this input.",
+    "facts": [
+      "The generated build loaded on the first attempt."
+    ],
+    "notMeasured": [
+      "Behaviour: no scenario was run against the original.",
+      "Visual appearance."
+    ]
+  },
+  "honestyNotes": [
+    "The model responses came from a local test server and are fixtures."
+  ],
+  "outcome": "completed",
+  "failure": null
+}

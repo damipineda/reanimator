@@ -1255,6 +1255,72 @@ matching it; `LICENSE` (MIT) exists at the repo root and is tracked.
 
 ---
 
+## `reanimator convert`: the pipeline made real (and what could and could not be run)
+
+Built `reanimator convert <file.swf>`: real env-configured `LlmProvider`s (Anthropic Messages
+API and any OpenAI-compatible endpoint; key only from env vars, redacted from every error,
+never written to the cache), `CachedLlm` (SHA-256 of the exact request, atomic writes,
+truncated responses never cached), an orchestrator (`src/pipeline/convert.ts`) running
+extract -> Analyzer -> Rewriter -> headless load check with up to 2 LLM repair attempts ->
+verifier -> HTML report, and a CLI (`bin/reanimator.mjs`, `npm run convert`). Every stage is
+dependency-injected, so the repair loop and every failure path are covered by fast unit tests
+(15 for the orchestrator; 146 tests in the whole suite). The final report is rendered from ONE
+`RunRecord`, and its "how far from the original" text is computed from measured facts only,
+never from model output. Three pieces (provider+cache, generic load-check/observer, report
+renderer) were written by parallel sub-agents against interfaces fixed up front in
+`src/pipeline/types.ts`; I wrote the orchestrator, parsing, distance logic and CLI and re-ran
+everything myself rather than trusting their summaries.
+
+**What was NOT possible: a real LLM run.** This machine has no LLM API key (checked env var
+names only, never values). So the real `convert` run on `lunar-lander.swf` stops, honestly, at
+the Analyzer with the exact missing variables, after a real FFDec extraction (344 files). I did
+not substitute a sub-agent or hand-pasted output and call it a pipeline run.
+**LLM cost of this work: $0 and 0 real tokens**; Kiro credits are not visible to me or to the
+CLI, so I cannot report them (the sub-agents and this session consumed some).
+
+**What was run end to end instead, labeled as what it is.** `tests/helpers/replay-llm-server.mjs`
+is a localhost Anthropic-shaped endpoint that replays the already-saved fresh-session
+Analyzer/Rewriter outputs. With it, the REAL extractor, REAL Chromium load check, REAL verifier
+against the original in Ruffle and the REAL report ran on `lunar-lander.swf`. The provider is
+detected as `local-test-server` and the report prints a banner saying the output is a test
+fixture, not an LLM result. Token counts from it are synthetic (chars/4). I broke the first
+Rewriter reply on purpose (a syntax error in `src/main.js`): the real load check caught it
+(`SyntaxError: Unexpected identifier 'is'`), the repair call fixed it, 1 repair attempt used.
+Verdict, measured: `free-fall` PASS, `crash-tilt` PASS (12.7 m/s on both sides), `soft-landing`
+FAIL (generated 1.4 m/s softLanded vs original 0.6 m/s, but only 1 of 3 original runs had a
+readable landing message, so n=1), overall **FAIL**; headline "matched the original on 2, differed
+on 1. It is NOT equivalent". That is the same behavioral picture as the earlier manual
+fresh-session run, now produced by the automated path. The point of this run is that the
+machinery works; it says nothing about how good any real model's output will be.
+
+**Bug found by the cache test, not by reading code.** Re-running with the server DOWN failed
+with ECONNREFUSED: the Analyzer prompt had changed, so the cache key had too. Cause: FFDec's
+export of the SAME swf is not byte-stable (7 library files differ run to run, only in the ORDER
+of `var` declarations), and I had put "N characters of library code not sent" into the prompt.
+Zero application files differed. Fix: the prompt states only the (stable) file count; the
+character total stays in the report. Regression test added (prompt must be identical when only
+library files change). After the fix: cold run = 3 live calls; second run with the server down
+= 0 live, 3 cached, repair included, and no cache file contains the key.
+
+**Design choices to judge, not hide.**
+- *Analyzer input selection is a structural heuristic*: timeline scripts + default-package
+  classes are sent (33 files, ~44.7K chars here); named-namespace libraries (255 files, ~898K
+  chars: ASWing, flashcommon) are not, and the prompt and report say so. It would under-sample a
+  simulation whose own logic lives in a namespaced package.
+- *The Analyzer sees only scripts.* Images, sounds, symbol geometry (e.g. the landing-zone
+  positions the hand-built reference recovered from XFL) and movie text are not sent, so the
+  automated path cannot reproduce them; the report lists this under "not measured".
+- *`src/prompts/repair.md` is new*; `analyzer.md` and `rewriter.md` were not touched, and the
+  hand-built reference was not touched.
+- *The verifier reads generated builds through visible text* (outcome literals come from the
+  Analyzer's own `literalStrings`); a canvas-only or paraphrasing build reads as unobservable
+  and becomes NON_COMPARABLE rather than a guess. Verification only runs for the one input the
+  original-side harness plays; any other SWF is converted but reported as unverified.
+- *Auto-start alignment is approximate* (about one poll plus one physics tick), as in the
+  earlier investigations.
+
+---
+
 ## Kiro Usage Patterns
 
 ### Specs vs Vibe Coding

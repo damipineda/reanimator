@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "input": {
+    "file": "broken-toy.swf",
+    "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+    "bytes": 1024
+  },
+  "startedAt": "2030-02-03T08:00:00.000Z",
+  "finishedAt": "2030-02-03T08:00:41.000Z",
+  "wallSeconds": 41,
+  "config": {
+    "provider": "example-provider",
+    "model": "toy-model-1",
+    "baseUrlHost": "llm.example.test",
+    "providerKind": "live-api",
+    "promptHashes": {
+      "analyzer.md": "aaaa111122223333444455556666777788889999aaaabbbbccccddddeeeeffff"
+    },
+    "maxRepairAttempts": 2
+  },
+  "stages": [
+    { "name": "extract", "status": "ok", "ms": 800, "detail": "Extracted 1 script file." },
+    { "name": "analyzer", "status": "failed", "ms": 39000, "detail": "BehaviorSpec failed schema validation twice." },
+    { "name": "rewriter", "status": "skipped", "ms": 0, "detail": "Skipped: analyzer failed." },
+    { "name": "loadCheck", "status": "skipped", "ms": 0, "detail": "Skipped: analyzer failed." },
+    { "name": "verify", "status": "skipped", "ms": 0, "detail": "Skipped: analyzer failed." },
+    { "name": "report", "status": "ok", "ms": 20, "detail": "Wrote report.html for the failed run." }
+  ],
+  "llm": {
+    "calls": [
+      {
+        "stage": "analyzer",
+        "key": "1111aaaa2222bbbb3333cccc4444dddd5555eeee6666ffff7777000088889999",
+        "cached": false,
+        "provider": "example-provider",
+        "model": "toy-model-1",
+        "inputTokens": 900,
+        "outputTokens": 400,
+        "ms": 18000,
+        "createdAt": "2030-02-03T08:00:05.000Z"
+      },
+      {
+        "stage": "analyzer-retry",
+        "key": "9999888877776666555544443333222211110000ffffeeeeddddccccbbbbaaaa",
+        "cached": false,
+        "provider": "example-provider",
+        "model": "toy-model-1",
+        "inputTokens": 1000,
+        "outputTokens": 350,
+        "ms": 20000,
+        "createdAt": "2030-02-03T08:00:25.000Z"
+      }
+    ],
+    "totals": {
+      "liveCalls": 2,
+      "cachedCalls": 0,
+      "liveInputTokens": 1900,
+      "liveOutputTokens": 750,
+      "savedInputTokens": 0,
+      "savedOutputTokens": 0,
+      "estimatedCostUsd": null,
+      "priceConfigured": false
+    }
+  },
+  "analyzer": null,
+  "rewriter": null,
+  "loadCheck": null,
+  "verification": null,
+  "distance": {
+    "headline": "No output was produced, so there is nothing to compare with the original.",
+    "facts": [
+      "The run stopped in the analyzer stage."
+    ],
+    "notMeasured": [
+      "Everything: no generated build exists."
+    ]
+  },
+  "honestyNotes": [
+    "This is a failed run. No BehaviorSpec or build was produced."
+  ],
+  "outcome": "failed",
+  "failure": {
+    "stage": "analyzer",
+    "reason": "Model output was not valid JSON after one retry."
+  }
+}

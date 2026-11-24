@@ -47,6 +47,39 @@ those specific local-only steps yourself:
    `docs/KIRO_NOTES.md` for the exact commands used during development, and
    "Running the full verifier" below).
 
+## Convert a SWF: `reanimator convert`
+```
+# 1. configure an LLM (env vars only; the key is never written to disk or committed)
+$env:REANIMATOR_LLM_PROVIDER = "anthropic"          # or "openai-compatible"
+$env:REANIMATOR_LLM_MODEL    = "<model id>"          # no default: ids go stale
+$env:REANIMATOR_LLM_API_KEY  = "<your key>"          # or ANTHROPIC_API_KEY / OPENAI_API_KEY
+# optional: REANIMATOR_LLM_BASE_URL, REANIMATOR_LLM_MAX_TOKENS (default 16000),
+#           REANIMATOR_LLM_PRICE_INPUT_PER_MTOK / REANIMATOR_LLM_PRICE_OUTPUT_PER_MTOK
+#           (USD per million tokens; only used to print a cost estimate)
+
+# 2. run it
+npm run convert -- local-samples/lunar-lander.swf     # or: node bin/reanimator.mjs convert <file.swf>
+```
+Pipeline: FFDec extract -> Analyzer (LLM) -> Rewriter (LLM) -> headless load check in
+Chromium, with up to 2 LLM repair attempts (`--max-repairs N`) -> verifier -> HTML report.
+Each run writes `work/convert/<sha256-prefix>/` (extracted files, the generated `build/`,
+`run-record.json`, `report.html`); `work/` is gitignored and never committed.
+
+- **Cache:** every LLM response is cached by the SHA-256 of the exact request (provider,
+  model, max tokens, system prompt, prompt) in `.cache/reanimator/` (gitignored; override
+  with `REANIMATOR_CACHE_DIR`). Re-running the same conversion makes no API call and costs
+  nothing; `--no-cache` forces live calls.
+- **Verifier:** compares the generated build with the original in Ruffle on the scripted
+  scenarios in `scenarios/<swf name>/`. It needs the local-only assets described above
+  (`local-samples/lunar-lander.swf`, `local-samples/ruffle/`); without them it is reported as
+  SKIPPED, never as a pass. Other SWFs are converted but not verified (the original-side
+  harness only plays that one file).
+- **The report states how far the output is from the original** using only measured facts, lists
+  what was *not* measured, and shows every LLM call (live vs cached), tokens, and cost. Cost is
+  `not computed` unless you set the two price variables; Kiro credits are not visible to the CLI.
+- Exit code 0 = the pipeline ran to the end (this does **not** mean the output matches the
+  original; read the report), 1 = it stopped at a stage, 2 = usage error.
+
 ## Run the tests
 ```
 npm test

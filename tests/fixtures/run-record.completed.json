@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "input": {
+    "file": "toy-simulation.swf",
+    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "bytes": 48213
+  },
+  "startedAt": "2030-01-02T10:00:00.000Z",
+  "finishedAt": "2030-01-02T10:03:25.500Z",
+  "wallSeconds": 205.5,
+  "config": {
+    "provider": "example-provider",
+    "model": "toy-model-1",
+    "baseUrlHost": "llm.example.test",
+    "providerKind": "live-api",
+    "promptHashes": {
+      "analyzer.md": "aaaa111122223333444455556666777788889999aaaabbbbccccddddeeeeffff",
+      "rewriter.md": "bbbb111122223333444455556666777788889999aaaabbbbccccddddeeeeffff"
+    },
+    "maxRepairAttempts": 2
+  },
+  "stages": [
+    { "name": "extract", "status": "ok", "ms": 1200, "detail": "Extracted 3 script files from the toy file." },
+    { "name": "analyzer", "status": "ok", "ms": 0, "detail": "BehaviorSpec served from cache." },
+    { "name": "rewriter", "status": "ok", "ms": 61000, "detail": "Generated 3 files." },
+    { "name": "loadCheck", "status": "ok", "ms": 9000, "detail": "Loaded after 1 repair attempt." },
+    { "name": "verify", "status": "ok", "ms": 120000, "detail": "3 scenarios compared: 1 PASS, 1 FAIL, 1 NON_COMPARABLE." },
+    { "name": "report", "status": "ok", "ms": 30, "detail": "Wrote report.html." }
+  ],
+  "llm": {
+    "calls": [
+      {
+        "stage": "analyzer",
+        "key": "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+        "cached": true,
+        "provider": "example-provider",
+        "model": "toy-model-1",
+        "inputTokens": 1200,
+        "outputTokens": 800,
+        "ms": 14000,
+        "createdAt": "2030-01-01T09:00:00.000Z"
+      },
+      {
+        "stage": "rewriter",
+        "key": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        "cached": false,
+        "provider": "example-provider",
+        "model": "toy-model-1",
+        "inputTokens": 3000,
+        "outputTokens": 5000,
+        "ms": 61000,
+        "createdAt": "2030-01-02T10:00:20.000Z"
+      },
+      {
+        "stage": "repair-1",
+        "key": "feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface",
+        "cached": false,
+        "provider": "example-provider",
+        "model": "toy-model-1",
+        "inputTokens": 6000,
+        "outputTokens": 2500,
+        "ms": 30000,
+        "createdAt": "2030-01-02T10:01:30.000Z"
+      }
+    ],
+    "totals": {
+      "liveCalls": 2,
+      "cachedCalls": 1,
+      "liveInputTokens": 9000,
+      "liveOutputTokens": 7500,
+      "savedInputTokens": 1200,
+      "savedOutputTokens": 800,
+      "estimatedCostUsd": 0.1395,
+      "priceConfigured": true
+    }
+  },
+  "analyzer": {
+    "inputFiles": ["scripts/Toy.as", "scripts/Ball.as", "scripts/Ui.as"],
+    "inputChars": 9120,
+    "spec": {
+      "title": "Toy Simulation",
+      "inputs": [
+        { "name": "Space", "kind": "key", "description": "Kicks the toy ball." },
+        { "name": "Reset", "kind": "uiControl", "description": "Puts the ball back at the start." }
+      ],
+      "state": [
+        { "name": "ballHeight", "type": "number", "description": "Height of the toy ball." },
+        { "name": "ballSpeed", "type": "number", "description": "Vertical speed of the toy ball." },
+        { "name": "bounces", "type": "number", "description": "Bounce counter." }
+      ],
+      "rules": [
+        { "description": "Each tick the ball speed decreases by a fixed amount.", "citation": "Ball.as:10-14" },
+        { "description": "When the ball reaches height 0 its speed is reversed and halved.", "citation": "Ball.as:20-31" },
+        { "description": "The bounce counter increases by one at every bounce." }
+      ],
+      "outputs": [
+        { "name": "heightLabel", "description": "Shows the ball height." }
+      ],
+      "notes": [
+        "It is unclear whether the counter stops at 99."
+      ],
+      "literalStrings": [
+        { "name": "title_str", "value": "Toy Simulation", "citation": "Ui.as:3" },
+        { "name": "reset_str", "value": "Reset", "citation": "Ui.as:4" }
+      ],
+      "assumptions": [
+        { "description": "The tick length was not stated by the source.", "choiceMade": "Analyzer wrote 'unknown' in the rule instead of a number.", "citation": "Ball.as:10" }
+      ]
+    }
+  },
+  "rewriter": {
+    "files": [
+      { "path": "index.html", "bytes": 1800 },
+      { "path": "src/physics.js", "bytes": 2400 },
+      { "path": "src/main.js", "bytes": 3100 }
+    ],
+    "assumptions": [
+      { "description": "Tick length not given by the spec.", "choiceMade": "Used a fixed 40 ms tick.", "citation": "rules[0]" },
+      { "description": "Bounce counter limit not specified.", "choiceMade": "No upper limit applied.", "citation": "notes[0]" }
+    ],
+    "buildDir": "work/runs/toy-simulation/build"
+  },
+  "loadCheck": {
+    "attempts": [
+      { "attempt": 1, "ok": false, "errors": ["ReferenceError: bounceCount is not defined"], "warnings": [] },
+      { "attempt": 2, "ok": true, "errors": [], "warnings": ["Deprecated API used in main.js"] }
+    ],
+    "finalOk": true
+  },
+  "verification": {
+    "status": "FAIL",
+    "reason": "1 of 3 scenarios diverges.",
+    "scenarios": [
+      {
+        "scenarioId": "drop-from-rest",
+        "status": "PASS",
+        "notes": null,
+        "original": { "runs": 3, "landingSpeed": { "min": 4.1, "max": 4.3, "mean": 4.2, "n": 3 }, "landedByEnd": true },
+        "generated": { "loaded": true, "startMode": "button", "crashState": "settled", "landingSpeed": 4.2, "range": null, "landedByEnd": true, "consoleErrors": [] },
+        "landingSpeedOk": true,
+        "categoryMismatch": false
+      },
+      {
+        "scenarioId": "kick-once",
+        "status": "FAIL",
+        "notes": "Generated speed 6.9 is outside the original spread 5.0-5.2.",
+        "original": { "runs": 3, "landingSpeed": { "min": 5, "max": 5.2, "mean": 5.1, "n": 3 }, "landedByEnd": true },
+        "generated": { "loaded": true, "startMode": "button", "crashState": "settled", "landingSpeed": 6.9, "range": null, "landedByEnd": true, "consoleErrors": [] },
+        "landingSpeedOk": false,
+        "categoryMismatch": false
+      },
+      {
+        "scenarioId": "never-lands",
+        "status": "NON_COMPARABLE",
+        "notes": "The original landing speed could not be read.",
+        "original": { "runs": 3, "landingSpeed": { "min": null, "max": null, "mean": null, "n": 0 }, "landedByEnd": false },
+        "generated": { "loaded": true, "startMode": "auto", "crashState": "airborne", "landingSpeed": null, "range": null, "landedByEnd": false, "consoleErrors": ["Warning: toy console message"] },
+        "landingSpeedOk": null,
+        "categoryMismatch": false
+      }
+    ]
+  },
+  "distance": {
+    "headline": "Of 3 scripted scenarios, 1 matched the original, 1 diverged and 1 could not be compared.",
+    "facts": [
+      "1 of 3 scenarios has a generated landing speed inside the original's measured spread.",
+      "The generated build loaded after 1 repair attempt.",
+      "The Rewriter recorded 2 assumptions."
+    ],
+    "notMeasured": [
+      "Visual appearance (no pixel comparison was made).",
+      "Sound.",
+      "Any input sequence other than the 3 scripted scenarios."
+    ]
+  },
+  "honestyNotes": [
+    "The Analyzer response was served from the cache, not generated in this run.",
+    "The original was measured through OCR, which can misread digits."
+  ],
+  "outcome": "completed",
+  "failure": null
+}

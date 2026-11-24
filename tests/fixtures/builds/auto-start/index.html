@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>auto start fixture</title></head>
+<body>
+<div>Range 7</div>
+<div>Clock: <span id="c">0</span></div>
+<div id="m"></div>
+<script>
+  // Test fixture (not PhET content). Ticks by itself; shows a crash message after 800ms.
+  const t0 = performance.now();
+  setInterval(() => {
+    const e = performance.now() - t0;
+    document.getElementById('c').textContent = String(Math.floor(e / 40));
+    if (e > 800) document.getElementById('m').textContent = 'Landing speed = 21,5 m/s Crash landing, legs damaged.';
+  }, 40);
+</script>
+</body></html>

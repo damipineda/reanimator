@@ -52,7 +52,17 @@ function withinSpread(value, spreadResult) {
   return value >= spreadResult.min - DISPLAY_ROUNDING_SLACK && value <= spreadResult.max + DISPLAY_ROUNDING_SLACK;
 }
 
-export async function verifyScenario(scenario, { originalRuns = 3 } = {}) {
+// Options (all optional; defaults reproduce the original behaviour exactly):
+// - rebuildRunner: async (scenario) => { final: { landingSpeed, pos:{x}, crashState, observable? } }
+//   lets the SAME comparison logic verify any build (the `reanimator convert`
+//   pipeline passes an adapter for a generated build). `final.observable === false`
+//   means the build cannot be read (e.g. canvas-only) -> NON_COMPARABLE, never a guess.
+// - resultsDir: where per-scenario JSON is written. The pipeline passes its own run
+//   directory so it can never overwrite the hand-built reference's official results.
+export async function verifyScenario(
+  scenario,
+  { originalRuns = 3, rebuildRunner = runScenarioAgainstRebuild, resultsDir = RESULTS_DIR } = {}
+) {
   if (!hasRealAssets()) {
     return {
       scenarioId: scenario.id,
@@ -64,15 +74,31 @@ export async function verifyScenario(scenario, { originalRuns = 3 } = {}) {
     };
   }
 
-  fs.mkdirSync(RESULTS_DIR, { recursive: true });
-  const screenshotDir = path.join(RESULTS_DIR, scenario.id);
+  fs.mkdirSync(resultsDir, { recursive: true });
+  const screenshotDir = path.join(resultsDir, scenario.id);
   fs.mkdirSync(screenshotDir, { recursive: true });
+
+  // The rebuild is run FIRST (cheap, seconds) so an unreadable build can
+  // short-circuit before the expensive original runs (minutes of Ruffle+OCR).
+  const rebuildResult = await rebuildRunner(scenario);
+  if (rebuildResult?.final?.observable === false) {
+    const unreadable = {
+      scenarioId: scenario.id,
+      status: 'NON_COMPARABLE',
+      maxDiffPct: null,
+      worstCheckpoint: null,
+      artifacts: [],
+      notes: 'NON_COMPARABLE: the build under test exposes no readable text (e.g. canvas-only), so its outcome cannot be observed without modifying it. The original was not run.',
+      detail: { rebuild: { landingSpeed: null, range: null, crashState: 'unknown', raw: rebuildResult.final }, originalSkipped: true },
+    };
+    fs.writeFileSync(path.join(resultsDir, `${scenario.id}.json`), JSON.stringify(unreadable, null, 2));
+    return unreadable;
+  }
 
   const originalResults = [];
   for (let i = 0; i < originalRuns; i++) {
     originalResults.push(await runScenarioAgainstOriginal(scenario, { screenshotDir }));
   }
-  const rebuildResult = await runScenarioAgainstRebuild(scenario);
 
   const lastCheckpoint = scenario.checkpoints[scenario.checkpoints.length - 1];
   const finalOriginalReadings = originalResults.map((r) => r.checkpoints[lastCheckpoint]);
@@ -168,7 +194,7 @@ export async function verifyScenario(scenario, { originalRuns = 3 } = {}) {
     },
   };
 
-  fs.writeFileSync(path.join(RESULTS_DIR, `${scenario.id}.json`), JSON.stringify(result, null, 2));
+  fs.writeFileSync(path.join(resultsDir, `${scenario.id}.json`), JSON.stringify(result, null, 2));
   return result;
 }
 
