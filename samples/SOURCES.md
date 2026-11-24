@@ -20,6 +20,37 @@ the public history. See `docs/KIRO_NOTES.md` for the record of that correction.
 
 ## Phase 5 (public demo candidates - pending confirmation, NOT yet committed)
 
+## Committed sample: Lunar Lander (PhET) — decision recorded 2026-11-15
+
+**Decision:** proceeding under CC BY 3.0 (Option A) without contacting PhET first. Recorded
+here as an explicitly accepted risk by the project owner, per this file's own promotion
+rule (criterion 4 below). Reasoning: Option B ("parties wishing to modify the source code")
+targets people who have access to and modify PhET's *published* source (true for their
+modern HTML5 sims on GitHub); PhET never published source for this legacy Flash sim, so
+Option B's mechanism is not available to us at all - only the compiled executable exists,
+and CC BY 3.0 (Option A) covers it directly. CC BY is a permissive license by design: it
+does not require asking the licensor first. Residual risk not eliminated by this reasoning:
+(a) the archive.org copy's authenticity is still not provable by hash against an official
+PhET copy (see "Authenticity check performed" below - circumstantial, not certain), (b) a
+different reading of Option A/B could exist that we have not had a lawyer confirm. Both are
+accepted as low-probability, disclosed risks for a credited, non-commercial student project.
+
+**Obligations this decision does NOT waive** (CC BY 3.0 requirements, independent of
+whether PhET replies to anything):
+1. Attribution, verbatim, wherever the rebuild is shown: "PhET Interactive Simulations /
+   University of Colorado / https://phet.colorado.edu"
+2. A visible notice that the work has been modified (CC BY 3.0 legal code requirement, not
+   optional) - e.g. "This is a Reanimator-built reconstruction, not the original PhET file."
+3. Both of the above must appear in the equivalence report and the web UI once built
+   (Requirement 9.2) - not yet built as of this note.
+
+**Manual step still required** (Kiro's tooling blocked an automated copy from `work/` into
+this folder - by design, for exactly this kind of file): copy the verified file yourself:
+```
+Copy-Item "work\phet-verify\lunar-lander.swf" "samples\lunar-lander.swf"
+```
+Then `git add samples/lunar-lander.swf samples/SOURCES.md && git commit`.
+
 ### Candidate 1: Lunar Lander (PhET)
 - **Author:** PhET Interactive Simulations, University of Colorado Boulder
 - **File verified at:** https://archive.org/download/flash_lunar-lander/lunar-lander.swf (SHA-256: `BFCC79493C0C7D189140A34C997563EB499C0A791FDFE969BB3463A2001A6A97`, downloaded 2026-11-07)
