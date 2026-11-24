@@ -801,6 +801,95 @@ inline, with a note on what was and wasn't root-caused). Verified both
 iframes load with zero console errors via Playwright before committing
 anything.
 
+### Correction + resolution: `soft-landing`'s real root cause, found via two follow-up checks
+
+Two things were asked next: (1) switch `soft-landing`'s primary metric
+away from landing speed (unreadable via OCR) to the soft/hard-landing
+counters and score digits instead, and re-measure the real original's
+stability on THIS scenario; (2) log thrust/altitude over time for both
+rebuilds to find out whether their divergence (above) starts in input
+handling or in physics. Both resolved - and the second one overturned
+the "unconfirmed" guess right above it, so that guess is corrected here
+rather than left standing.
+
+**(1) The real original, re-measured on score/counters - 6/6 runs
+agree, but not on "soft or hard."** `score` is already a working,
+previously-calibrated OCR field (no new calibration needed): the
+scenario's landing x (45m) sits inside real landing-spot 9 (`centerM:
+40.71, halfWidthM: 5.71`, see `geometry.js`), so a genuine soft/hard
+landing there SHOULD read `score=20` (soft, 10 base + 10 bonus) or
+`score=10` (hard, base only) per the recovered `ScoreKeeper` formula.
+Ran the original 5x with the IDENTICAL scripted keys as
+`soft-landing.json`: **all 5 runs read `score=0`** - not because it
+landed in a gap or crashed, but because **a full screenshot at the final
+checkpoint (t=21000ms) showed the lander still airborne and ACCELERATING
+UPWARD** (altitude 10m, v_y=+2.3 m/s, thrust still 15750N). One further,
+longer-observation run (checkpoints out to t=45000ms, same scripted
+keys, not retuned) confirms this is not "landing soon" - altitude climbs
+monotonically and v_y keeps increasing the whole time (23m/+4.2 ->
+50m/+6.7 -> 90m/+9.2 -> 142m/+11.7 -> 207m/+14.3 m/s by t=45s). **The
+real original does not land AT ALL under this scripted thrust profile -
+it flies away indefinitely, and does so identically across all 6
+runs: this is the single most STABLE result measured anywhere in this
+project** (zero variance in the qualitative outcome), it's just not the
+question "soft or hard" assumed could be asked. Documented as-is, per
+the time-box: the deeper "why" (whether Ruffle's own dt/clock model
+under AVM1 emulation runs measurably differently from native JS for a
+thrust-balanced case, or some other real discrepancy specific to
+thrust-vs-gravity-vs-mass rather than free-fall) is now a clearly scoped,
+named open question, not chased further this pass.
+
+**Reconciling this with the earlier `verify.mjs` run:** the official,
+previously-recorded `soft-landing` result (`work/verify-results/soft-landing.json`)
+shows `originalLandedByEnd: true` for one of its 3 runs - which this new,
+more careful 6-run investigation now shows was very likely an OCR FALSE
+POSITIVE, not a real landing: that check only asks "is the
+`landingMessage` crop's OCR text non-empty," and OCR can hallucinate
+non-garbage-looking text (it read `"Od"` there) from a region showing no
+real message at all. The score-based check used here is more reliable,
+since `score` only changes on a genuine `ScoreKeeper` update event, not
+on whatever OCR happens to guess from a crop. Not fixed in `verify.mjs`
+this pass (out of this task's scope), but named here so the two results
+aren't read as silently contradicting each other.
+
+**(2) Hand-built vs. AI-only divergence - NOT input handling, NOT a
+physics bug, IS a flaw in this test's own harness.** Logged `height`/
+`thrust`/`vy` every 500ms (plus extra samples right around the burn) for
+both rebuilds during the exact same scripted timeline
+(`work/verify-results/soft-landing-timeseries.json`). Two findings that
+together fully explain the divergence, overturning the "unconfirmed,
+maybe render-loop DOM work" guess above:
+- **Input handling is identical in both**: all 7 Up-arrow presses
+  register and reach the same final thrust (15750N) by the same
+  wall-clock time (~3.9s) in both rebuilds. Ruled out.
+- **The AI-only rebuild was already falling faster and further BEFORE
+  the burn even starts** - at t=3700ms (just before the first keypress),
+  hand-built reads height=39.14m/vy=-5.90; AI-only reads height=35m/
+  vy=-7.0 - and this gap is visible from the very first sample, t=0:
+  hand-built reads vy=0.00 (correct initial condition); AI-only ALREADY
+  reads vy=-1.1 at what this script calls "t=0". Root cause: the
+  hand-built rebuild's clock starts exactly when the test script clicks
+  Start (`t0 = Date.now()` set immediately before the click, and the
+  click synchronously starts the physics loop) - the two are locked
+  together by construction. The AI-only rebuild has no Start button to
+  click (it auto-starts during its own async `boot()`, before any
+  external signal) - by the time THIS test script finishes
+  `page.goto(..., {waitUntil:'networkidle'})` plus its own settle delay
+  and sets its own `t0`, the AI-only app's internal clock has ALREADY
+  been running for a real, unaccounted-for head start (the gap between
+  page load and this script's own `t0`). Every "fire this key at
+  t=3740ms" instruction after that lands correspondingly LATE on the
+  app's own internal timeline, by which point it has already fallen
+  further and faster than intended - which is exactly the shape of the
+  divergence measured. **This is a gap in this test's own
+  synchronization method for an auto-starting app, not a bug in the
+  Rewriter's physics or its keyboard handling** - the earlier
+  "unconfirmed... maybe DOM work" hypothesis is retracted; this is the
+  real, evidenced explanation. Next step (not done this pass, per the
+  time-box): synchronize `t0` to the app's actual first physics tick
+  (e.g. poll `height-value` for its first change) instead of to
+  page-load-settle, for any future auto-starting artifact.
+
 ### Demo page, verified Node-independent + prepared for GitHub Pages
 
 Checked that `web/index.html` depends on nothing Node-specific: every

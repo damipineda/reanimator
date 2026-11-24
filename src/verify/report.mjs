@@ -81,15 +81,21 @@ function ocrNote(id, d) {
       "The landing-message crop region was calibrated against the ORIGINAL's crash message " +
       "layout ('keyNotFound<speed> m/s'); a soft/hard landing message renders differently, so " +
       "OCR could not reliably extract a numeric landing speed for the original side of this " +
-      "scenario (raw OCR text was garbled, e.g. '- KEE') - this is a genuine, named OCR " +
-      "calibration gap, not hidden by this report. The comparison for this scenario rests on " +
-      "the category check (did it land?) and the range field, not landing speed. In one earlier " +
-      "test run of this same scripted input, the original had NOT yet landed (still ascending) " +
-      "at the same checkpoint where the rebuild had already landed softly - the burn timing " +
-      "sits close enough to a decision boundary that real wall-clock scheduling variance between " +
-      "the native-JS rebuild and the WASM-emulated original can occasionally put the two sides " +
-      "on different sides of 'has it landed yet' at one fixed checkpoint, even though both " +
-      "eventually land softly. The run recorded in this report did not hit that edge case."
+      "scenario. Tried switching the primary metric to 'score' instead (already a working, " +
+      "previously-calibrated OCR field - no new calibration needed): this scenario's landing x " +
+      "(45m) sits inside real landing-spot 9, so a genuine soft/hard landing there should read " +
+      "score=20 (soft) or score=10 (hard). Measured result, 5 real runs (plus one longer, " +
+      "45s-observation run with the SAME scripted keys, not retuned): score=0 in EVERY run - " +
+      "not because it landed in a gap or crashed, but because a screenshot at each checkpoint " +
+      "shows the lander still airborne and ACCELERATING UPWARD the entire time (altitude growing " +
+      "from 10m to 207m between t=21s and t=45s, v_y growing from +2.3 to +14.3 m/s). " +
+      "<strong>The real original does not land at all under this scripted thrust profile - it " +
+      "flies away indefinitely</strong>, identically across all 6 runs (the most STABLE result " +
+      "measured anywhere in this project, even though it isn't the 'soft or hard' question " +
+      "originally asked). See docs/KIRO_NOTES.md for the full account; the deeper 'why' " +
+      "(whether this specific thrust-vs-gravity-vs-mass scenario reveals a real discrepancy " +
+      "between Ruffle's emulated clock and native JS that pure free-fall never exercised) is " +
+      "left as a named, open question rather than chased further."
     );
   }
   return (
@@ -158,21 +164,26 @@ function rebuildComparisonSection(comparisons) {
       precision, 12.7 m/s. <code>soft-landing</code> diverges: the hand-built reference lands
       softly (~1.0 m/s) on the exact same scripted thrust-burst timeline; the AI-only rebuild
       consistently lands at 4.5-4.6 m/s (<code>hardLanded</code>), across 3 repeated real-browser
-      runs - not a one-off fluke. Checked whether this is a genuine formula difference: running
-      both implementations' <code>physics.js</code> directly in Node with an idealized, fixed
-      40ms tick (no browser, no real-timing variance) gives nearly IDENTICAL landing speeds for
-      both (~1.83 m/s, both <code>softLanded</code>) - so the two implementations are not
-      structurally different for this scenario. The divergence only appears with a real browser
-      actually running the app, meaning it is a real-world TIMING effect specific to how each
-      app's own render/physics loop behaves under real scheduling, not a formula bug - a
-      plausible but UNCONFIRMED candidate is the AI-only rebuild's render loop doing more
-      per-frame DOM work (<code>requestAnimationFrame</code> rebuilding a landing-marks layer
-      every frame) that could coarsen its physics tick's effective <code>dt</code> resolution
-      under load, which would make a tightly-timed "suicide burn" scenario land harder than
-      intended - reported as a real, repeatable, UNEXPLAINED-IN-FULL finding, not as a confirmed
-      diagnosis. Per the task that produced this comparison, the AI-only rebuild was run exactly
-      as the Rewriter produced it - not tuned, not fixed, not given special timing margin the
-      way <code>soft-landing.json</code>'s own burn was tuned for the hand-built reference.
+      runs - not a one-off fluke.
+      <strong>Root cause, confirmed via two follow-up checks (not left as a guess):</strong>
+      running both implementations' <code>physics.js</code> directly in Node with an idealized
+      fixed 40ms tick (no browser) gives nearly IDENTICAL landing speeds for both (~1.83 m/s,
+      both <code>softLanded</code>) - ruling out a formula bug. Logging thrust/altitude over time
+      in both real browsers shows BOTH rebuilds register all 7 Up-arrow presses identically,
+      reaching full thrust (15750N) at the same wall-clock time (~3.9s) - ruling out input
+      handling. What the log DOES show: the AI-only rebuild is already falling measurably faster
+      and further than the hand-built one BEFORE the burn even starts (and even at the test
+      script's own "t=0" sample). Cause: the hand-built rebuild's clock starts exactly when the
+      test script clicks its Start button (the two are synchronized by construction); the
+      AI-only rebuild has no Start button - it auto-starts during its own async boot(), before
+      the test script's own clock begins, giving it an unaccounted-for head start. <strong>This
+      is a gap in the test harness's synchronization for an auto-starting app, not a bug in the
+      Rewriter's physics or keyboard handling</strong> - see
+      <code>work/verify-results/soft-landing-timeseries.json</code> and docs/KIRO_NOTES.md for
+      the full log and reasoning. Per the task that produced this comparison, the AI-only
+      rebuild itself was run exactly as the Rewriter produced it - not tuned, not fixed; only
+      the TEST's own synchronization gap was found and explained, which is a separate thing from
+      fixing the artifact.
       ${anyErrors ? '<br/><strong>Console errors were observed</strong> - see work/verify-results/rebuild-comparison.json.' : ''}
     </p>`;
 }

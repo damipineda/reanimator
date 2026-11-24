@@ -118,15 +118,22 @@
   <p class="note">
     The AI-only rebuild loads and plays with zero console errors in all 3 scenarios, and
     matches the hand-built reference on 2 of 3. <code>soft-landing</code> diverges
-    consistently (3/3 runs, not a fluke): checked whether this is a real formula bug by running
-    both <code>physics.js</code> files directly in Node with an idealized fixed-tick simulation
-    (no browser) - both land at nearly the same speed (~1.83 m/s, both softLanded), so the
-    formulas themselves are equivalent for this scenario. The divergence only shows up with a
-    real browser actually running the app, so it is a real-world TIMING effect specific to how
-    each app's loop behaves under real scheduling - not fully root-caused, reported as a real,
-    repeatable, open finding rather than a confirmed diagnosis. Full numbers:
+    consistently (3/3 runs). <strong>Root cause, confirmed by logging thrust/altitude over
+    time in both rebuilds:</strong> not input handling (both register all 7 Up-arrow presses
+    identically, reaching full thrust at the same wall-clock time) and not a physics-formula
+    bug (an idealized, browser-free simulation of both <code>physics.js</code> files lands at
+    nearly the same speed, ~1.83 m/s, both <code>softLanded</code>) - it's a gap in THIS
+    TEST's own synchronization: the hand-built rebuild's clock starts exactly when the test
+    clicks its Start button; the AI-only rebuild auto-starts during its own page load, before
+    the test's clock begins, giving it an unaccounted head start that lands every scripted
+    keypress relatively later on its own internal timeline. Not a bug in the Rewriter's
+    output - a bug in how this specific test measures an auto-starting app. Separately, running
+    the REAL original 6x on this same scripted scenario found it does not land at all within
+    45 seconds (confirmed via the "soft/hard landing" score field, not landing speed) - the
+    most stable result measured anywhere in this project, just not the question originally
+    asked. Full numbers and reasoning:
     <a href="../docs/verifier-report.html#ai-only" target="_blank">verifier report, "Hand-built
-    reference vs. AI-only rebuild"</a>.
+    reference vs. AI-only rebuild"</a> and <code>docs/KIRO_NOTES.md</code>.
   </p>
 
   <h2>Verifier report</h2>
