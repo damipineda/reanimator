@@ -19,10 +19,10 @@
 </head>
 <body>
   <h1>Reanimator verifier report: Lunar Lander</h1>
-  <p class="overall">Overall verdict: <span style="background:#9a6700;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">PARTIAL</span></p>
+  <p class="overall">Overall verdict: <span style="background:#b31d1d;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">FAIL</span></p>
   <p class="note" style="font-size:1em;">
-    <strong>What this verdict actually means:</strong> 2/3 scenario(s) fully measured and matching (crash-tilt, free-fall); 1 scenario(s) NOT measurable at all for their primary metric, so neither confirmed nor refuted (soft-landing).
-    PARTIAL here means "no measured divergence, but not everything could be measured" - it is NOT a passing grade rounded up, and it is NOT a failure; it is reported as its own, distinct outcome, exactly as design.md's verdict model (PASS/PARTIAL/FAIL) defines it. See each scenario's "within spread?" row and note below for exactly which metric, for which scenario, could not be read.
+    <strong>What this verdict actually means:</strong> 2/3 scenario(s) fully measured and matching (crash-tilt, free-fall); 1 scenario(s) measured and DIVERGING (soft-landing).
+    
   </p>
   <p>
     Compares the real original (PhET's Lunar Lander .swf, run via a self-hosted Ruffle build,
@@ -99,7 +99,7 @@
   </section>
 
   <section class="scenario">
-    <h3>soft-landing <span style="background:#555;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">NON_COMPARABLE</span></h3>
+    <h3>soft-landing <span style="background:#b31d1d;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85em;">FAIL</span></h3>
     <p>A &#39;suicide burn&#39;: free-fall (no thrust) for the first 3.74s, then 7 discrete Up-arrow presses fired 20ms apart (each one +2250 thrust via increaseThrust(), reaching 15750 total) to decelerate sharply before touchdown. Timeline found by src/verify/design-soft-landing.mjs (idealized fixed-40ms-tick simulation of the reference physics.js, predicting ~0.58 m/s). An earlier 9-press/5.0s candidate (idealized prediction ~0.97 m/s) measured 2.05-2.06 m/s against the REAL rebuild in a browser - over the 2 m/s threshold - because real Playwright/CDP dispatch latency between 9 rapid keydown calls delays full thrust more than the idealized simulation accounts for (a systematic effect, not the random per-tick jitter an earlier +/-40%-jitter check had tested for). This 7-press/3.74s config was chosen by testing several candidates directly against the real rebuild and was then repeated 3x for consistency: measured 1.01, 0.96, 1.08 m/s across those 3 real runs, all comfortably softLanded - see docs/KIRO_NOTES.md for the full account of finding and fixing the first (too-marginal) candidate.</p>
     <p><strong>Expected outcome:</strong> softLanded with a comfortable real-world margin (~1.0 m/s vs. the 2 m/s threshold, measured over 3 real runs). Angle stays 0 throughout since no Left/Right key is ever sent.</p>
     <h4>Scripted key timeline</h4>
@@ -110,7 +110,7 @@
       <tr>
         <td>Landing speed (m/s)</td>
         <td>—</td><td>—</td><td>—</td>
-        <td>1</td>
+        <td>1.1</td>
         <td>N/A (OCR unreadable)</td>
       </tr>
       <tr>
@@ -121,12 +121,12 @@
       </tr>
       <tr>
         <td>Episode ended by last checkpoint?</td>
-        <td colspan="3">original: yes</td>
-        <td colspan="2">rebuild: yes </td>
+        <td colspan="3">original: no</td>
+        <td colspan="2">rebuild: yes &mdash; <strong style="color:#b31d1d">MISMATCH</strong></td>
       </tr>
       <tr><td>Rebuild crashState</td><td colspan="5">softLanded</td></tr>
     </table>
-    <p class="note"><strong>OCR limits on this scenario:</strong> The landing-message crop region was calibrated against the ORIGINAL&#39;s crash message layout (&#39;keyNotFound&lt;speed&gt; m/s&#39;); a soft/hard landing message renders differently, so OCR could not reliably extract a numeric landing speed for the original side of this scenario. Tried switching the primary metric to &#39;score&#39; instead (already a working, previously-calibrated OCR field - no new calibration needed): this scenario&#39;s landing x (45m) sits inside real landing-spot 9, so a genuine soft/hard landing there should read score=20 (soft) or score=10 (hard). Measured result, 5 real runs (plus one longer, 45s-observation run with the SAME scripted keys, not retuned): score=0 in EVERY run - not because it landed in a gap or crashed, but because a screenshot at each checkpoint shows the lander still airborne and ACCELERATING UPWARD the entire time (altitude growing from 10m to 207m between t=21s and t=45s, v_y growing from +2.3 to +14.3 m/s). &lt;strong&gt;The real original does not land at all under this scripted thrust profile - it flies away indefinitely&lt;/strong&gt;, identically across all 6 runs (the most STABLE result measured anywhere in this project, even though it isn&#39;t the &#39;soft or hard&#39; question originally asked). See docs/KIRO_NOTES.md for the full account; the deeper &#39;why&#39; (whether this specific thrust-vs-gravity-vs-mass scenario reveals a real discrepancy between Ruffle&#39;s emulated clock and native JS that pure free-fall never exercised) is left as a named, open question rather than chased further.</p>
+    <p class="note"><strong>OCR limits on this scenario:</strong> VERDICT: DIVERGES. The landing-message crop was calibrated against the ORIGINAL&#39;s crash message layout; a soft/hard landing message renders differently, so landing speed could not be read directly. Switched the primary metric to &#39;score&#39; (already a working, calibrated OCR field): this scenario&#39;s landing x (45m) sits inside real landing-spot 9, so a genuine landing there reads score=20 (soft) or score=10 (hard). The STANDARD pipeline run above (3 runs, via run-original.mjs&#39;s normal click path) measured score=0 every time, with the lander still airborne and accelerating upward - i.e. it never lands under this pipeline&#39;s own click timing. A SEPARATE, more careful follow-up investigation (see docs/KIRO_NOTES.md, &#39;Second correction&#39;) found this &#39;never lands&#39; behavior is itself a methodology artifact: the standard click helper has ~220ms of settle delay BEFORE the actual start, which on this knife-edge &#39;suicide burn&#39; scenario is enough to tip the outcome every time. With a properly ALIGNED start (settle delay moved before capturing t0, not after), &lt;strong&gt;the original DOES land - a hard landing at 2.8 m/s&lt;/strong&gt; (confirmed via a readable landing-message screenshot: &#39;keyNotFound2.8 m/s&#39;, hard landings: 1). Either way the scenario DIVERGES: the hand-built reference lands SOFT (~1.0-1.1 m/s) on the identical script. The aligned comparison also pinpoints WHERE: altitude tracks within ~0.6m through the entire free-fall phase (t=0-3700ms), and the first gap clearly above that noise (1.64m) appears at t=3800ms - exactly when thrust first engages, even though BOTH sides read the identical thrust value (9000N, then 15750N by t=3900ms) at every matched sample, ruling out input handling/key-repeat as the cause. The gap then grows continuously through the rest of the burn, pointing at the physics integration itself behaving differently once a large, time-varying acceleration is involved (vs. free-fall&#39;s small constant case) - not fully distinguished (mass/thrust constant precision vs. a dt-measurement difference under Ruffle&#39;s AVM1 emulation are both live candidates) within this investigation&#39;s own time-box, and the rebuild was NOT modified to chase this down further. Note: the standard pipeline result above still uses the unaligned click path (not yet updated to match) and will keep reporting &#39;never lands&#39; until it is - the DIVERGES verdict is correct either way, only the detailed mechanism shown here is the more precise one.</p>
   </section>
 
   <h2>Mutation test</h2>

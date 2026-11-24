@@ -890,6 +890,107 @@ maybe render-loop DOM work" guess above:
   (e.g. poll `height-value` for its first change) instead of to
   page-load-settle, for any future auto-starting artifact.
 
+### Second correction: an ALIGNED start shows the original DOES land - hard, not never
+
+The "(1)" finding above ("the real original does not land at all,
+6/6 runs") is now **corrected, not just caveated**. It was itself a
+methodology artifact - the SAME class of bug found in "(2)" for the
+AI-only rebuild (a start-synchronization gap), just affecting the
+original/hand-built comparison this time instead of the two rebuilds.
+
+**What was wrong:** `run-original.mjs`'s standard click helper
+(`swfClick()`) does ~220ms of overlay-dismissal/settle waiting BEFORE the
+actual mouse-down that starts the SWF - time that elapses AFTER this
+test's `t0` is captured but BEFORE the original's own clock actually
+starts. Every one of the 6 "never lands" runs carried this same
+systematic ~220ms head start on the scripted burn's effective timing
+relative to the original's own fall - enough, on this specific
+knife-edge "suicide burn" scenario, to tip the outcome from "lands" to
+"overshoots into permanent ascent" every single time (which is exactly
+why it looked so suspiciously STABLE - it was deterministically wrong in
+the same direction every run, not randomly unresolved).
+
+**The fix:** split `swfClick()` into `prepareAlignedClick()` (overlay
+dismissal + mouse positioning, called BEFORE capturing `t0`) and
+`triggerAlignedClick()` (the bare mouse down+up, called immediately
+after) - `ruffle-helpers.mjs`. Did the same symmetric split for the
+hand-built rebuild's own click (down+wait+up instead of one
+`page.mouse.click()` call) so both sides are started by directly
+comparable sequences. Built `log-original-vs-handbuilt-timeseries.mjs` to
+log altitude/thrust/range/fuel over time for both, OCR for the original
+(no bridge exists), exact state for the hand-built one, at 22 matched
+sample times from t=0 to t=16000ms.
+
+**Result: the original DOES land - a HARD landing at 2.8 m/s, soft
+landings: 0, hard landings: 1** (read directly off a screenshot at
+t=14000ms: `"keyNotFound2.8 m/s"`, altitude=0, thrust=0, fuel frozen at
+776 - all consistent with a genuine landing event, not an OCR artifact
+this time). This REPLACES the "never lands" conclusion for an aligned
+start, though the scenario still, genuinely, **DIVERGES** either way:
+the hand-built reference still lands SOFT (~1.0-1.1 m/s) on the identical
+script, so `hardLanded` vs `softLanded` is a real, different-in-kind
+mismatch, not resolved by the alignment fix - just correctly explained by
+it instead of being masked by it.
+
+**First moment of divergence, and what changed there:** altitude tracks
+within ~0.6m between the original and the aligned hand-built rebuild
+for the entire free-fall phase (t=0 to t=3700ms - e.g. t=2000: 47m vs.
+46.90m; t=3500: 41m vs. 40.45m). The first gap clearly above that noise
+floor appears at **t=3800ms** (37m vs. 38.64m, a 1.64m gap) - the exact
+sample where thrust first increases from 0. Checked whether this is a
+key-handling difference: **no** - at t=3800 BOTH read `thrust=9000`
+(4 presses applied) and both reach `thrust=15750` (all 7 presses) by
+t=3900 - input handling and thrust-step-per-press are IDENTICAL at every
+matched sample. The gap instead GROWS continuously through the rest of
+the burn (3.21m at t=3900, 4.52m at t=4200, continuing to widen) rather
+than appearing as a single one-time offset, which points at the PHYSICS
+INTEGRATION itself behaving differently once a large, time-varying
+acceleration (thrust) is involved - something free-fall's small, constant
+-1.6 m/s² never exercises. `vY` was also OCR'd from the same screenshots
+but was too unreliable (mostly unparseable or implausible, e.g. a
+misread sign) to use quantitatively - fuel tracks reasonably closely
+where readable (807 vs. 805.1 at t=6000; 776 vs. 774.3 at t=12000),
+arguing against a grossly different fuel-consumption-rate explanation.
+**Not fully distinguished within this time-box**: the two live
+candidates are (a) a small mass/thrust-constant imprecision in the
+recovered values vs. the true original, or (b) a dt-measurement
+difference between native JS and Ruffle's AVM1 emulation that only
+becomes visible once acceleration is large and changing (vs. free-fall's
+small constant case) - named as the clear next investigative step, not
+resolved further this pass, and **the rebuild was not modified or tuned**
+to chase this down, per the task's own instruction.
+
+**What this means for the already-committed `verify.mjs` pipeline
+result:** that pipeline still uses the UNALIGNED `swfClick()` for its
+official, reproducible runs, so it will still report "never lands" until
+`run-original.mjs` itself is updated to use the aligned click helpers -
+not done this pass (a bigger change than this diagnostic task's scope:
+it touches the main pipeline, not just a side investigation). The
+scenario's **FAIL/DIVERGES** status (see the scoring-bug fix below) is
+still the correct top-line verdict either way - original and hand-built
+reach different landing categories - but the detailed "why" shown in
+`docs/verifier-report.html` is now annotated with this more precise,
+aligned finding rather than left on the superseded "never lands" story.
+
+### Verifier scoring fix: soft-landing reports DIVERGES, not NON_COMPARABLE
+
+The earlier `verify.mjs` scoring treated `originalLandedByEnd` as "the
+`landingMessage` crop's OCR text is non-empty" - exactly the false-positive-
+prone check named above. Fixed to require either a successfully PARSED
+landing-speed number or `score > 0` - a real signal, not "OCR returned
+something." Also simplified `categoryMismatch`'s logic (the old version
+had a redundant double-negative clause that silently cancelled the
+mismatch check whenever the original landed on ANY of its runs,
+regardless of what the rebuild did - removed, now a direct comparison).
+Re-ran the full `verify.mjs` pipeline: `soft-landing` now correctly
+reports **FAIL** (`originalLandedByEnd: false`, `rebuildLanded: true`,
+`categoryMismatch: true`) and the overall verdict is **FAIL** (per
+`computeVerdict()`'s existing, already-property-tested monotonicity rule:
+any FAIL makes the whole verdict FAIL). `docs/verifier-report.html` and
+`web/index.html` updated to match - neither displays the old "landed"
+result anymore, and the scenario is labeled DIVERGES/FAIL throughout, per
+this task's explicit instruction.
+
 ### Demo page, verified Node-independent + prepared for GitHub Pages
 
 Checked that `web/index.html` depends on nothing Node-specific: every

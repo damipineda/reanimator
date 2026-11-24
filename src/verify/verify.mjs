@@ -99,14 +99,20 @@ export async function verifyScenario(scenario, { originalRuns = 3 } = {}) {
   // airborne (a REAL divergence this verifier found - see
   // docs/KIRO_NOTES.md's "soft-landing timing sensitivity" finding) would
   // silently read as PASS.
+  // CORRECTED (see docs/KIRO_NOTES.md, "OCR false positive"): this used
+  // to be "is the landingMessage crop's OCR text non-empty" - but OCR can
+  // hallucinate non-garbage-looking text from a crop showing no real
+  // message at all (observed: read "Od" from an empty region once). A
+  // genuine landing needs EITHER a successfully parsed landing-speed
+  // number (extractNumber actually matched a number pattern, not just
+  // "any text") OR a score increase (score only ever changes on a real
+  // ScoreKeeper event, never on OCR noise) - requiring one of those two
+  // is far less likely to false-positive than "OCR returned *something*."
   const originalLandedByEnd = finalOriginalReadings.some(
-    (r) => r && r.landingMessageRaw && r.landingMessageRaw.trim().length > 0
-  );
-  const originalNeverLanded = finalOriginalReadings.every(
-    (r) => !r || !r.landingMessageRaw || r.landingMessageRaw.trim().length === 0
+    (r) => r && ((r.landingSpeed !== null && r.landingSpeed !== undefined) || (r.score !== null && r.score > 0))
   );
   const rebuildLanded = rebuildResult.final.crashState !== 'inFlight';
-  const categoryMismatch = rebuildLanded !== originalLandedByEnd && !(originalLandedByEnd && !originalNeverLanded);
+  const categoryMismatch = rebuildLanded !== originalLandedByEnd;
 
   // landingSpeed is the PRIMARY metric every one of these scenarios
   // exists to check (it's what decides crashLanded/hardLanded/softLanded

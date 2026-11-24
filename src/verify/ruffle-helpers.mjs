@@ -41,6 +41,31 @@ export async function swfClick(page, x, y) {
   await dismissOverlays(page);
 }
 
+// For a REAL aligned-start comparison against another app (e.g. the
+// hand-built rebuild, whose own click handler starts its clock
+// synchronously) - swfClick() above has ~220ms of built-in dismiss/settle
+// waits BEFORE the actual mouse-down, which would itself introduce a
+// head-start-style misalignment of the kind found with the AI-only
+// rebuild (see docs/KIRO_NOTES.md). Split into two steps so all of that
+// settling happens BEFORE the caller captures its own t0:
+//   1. prepareAlignedClick(page, x, y) - dismiss overlays, move the mouse
+//      into position. Call this BEFORE capturing t0.
+//   2. triggerAlignedClick(page) - the actual mouse down+up, with NO
+//      artificial wait before the down event. Call this immediately
+//      after capturing t0.
+export async function prepareAlignedClick(page, x, y) {
+  await dismissOverlays(page);
+  await page.waitForTimeout(100);
+  await dismissOverlays(page);
+  await page.mouse.move(x, y);
+}
+
+export async function triggerAlignedClick(page) {
+  await page.mouse.down();
+  await page.waitForTimeout(40); // real click duration, not a settle delay
+  await page.mouse.up();
+}
+
 export async function loadOriginal(page, url) {
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1200);

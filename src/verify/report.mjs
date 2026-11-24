@@ -78,24 +78,35 @@ function scenarioSection(scenario, result) {
 function ocrNote(id, d) {
   if (id === 'soft-landing') {
     return (
-      "The landing-message crop region was calibrated against the ORIGINAL's crash message " +
-      "layout ('keyNotFound<speed> m/s'); a soft/hard landing message renders differently, so " +
-      "OCR could not reliably extract a numeric landing speed for the original side of this " +
-      "scenario. Tried switching the primary metric to 'score' instead (already a working, " +
-      "previously-calibrated OCR field - no new calibration needed): this scenario's landing x " +
-      "(45m) sits inside real landing-spot 9, so a genuine soft/hard landing there should read " +
-      "score=20 (soft) or score=10 (hard). Measured result, 5 real runs (plus one longer, " +
-      "45s-observation run with the SAME scripted keys, not retuned): score=0 in EVERY run - " +
-      "not because it landed in a gap or crashed, but because a screenshot at each checkpoint " +
-      "shows the lander still airborne and ACCELERATING UPWARD the entire time (altitude growing " +
-      "from 10m to 207m between t=21s and t=45s, v_y growing from +2.3 to +14.3 m/s). " +
-      "<strong>The real original does not land at all under this scripted thrust profile - it " +
-      "flies away indefinitely</strong>, identically across all 6 runs (the most STABLE result " +
-      "measured anywhere in this project, even though it isn't the 'soft or hard' question " +
-      "originally asked). See docs/KIRO_NOTES.md for the full account; the deeper 'why' " +
-      "(whether this specific thrust-vs-gravity-vs-mass scenario reveals a real discrepancy " +
-      "between Ruffle's emulated clock and native JS that pure free-fall never exercised) is " +
-      "left as a named, open question rather than chased further."
+      "VERDICT: DIVERGES. The landing-message crop was calibrated against the ORIGINAL's crash " +
+      "message layout; a soft/hard landing message renders differently, so landing speed could " +
+      "not be read directly. Switched the primary metric to 'score' (already a working, " +
+      "calibrated OCR field): this scenario's landing x (45m) sits inside real landing-spot 9, " +
+      "so a genuine landing there reads score=20 (soft) or score=10 (hard). The STANDARD " +
+      "pipeline run above (3 runs, via run-original.mjs's normal click path) measured score=0 " +
+      "every time, with the lander still airborne and accelerating upward - i.e. it never lands " +
+      "under this pipeline's own click timing. A SEPARATE, more careful follow-up investigation " +
+      "(see docs/KIRO_NOTES.md, 'Second correction') found this 'never lands' behavior is itself " +
+      "a methodology artifact: the standard click helper has ~220ms of settle delay BEFORE the " +
+      "actual start, which on this knife-edge 'suicide burn' scenario is enough to tip the " +
+      "outcome every time. With a properly ALIGNED start (settle delay moved before capturing " +
+      "t0, not after), <strong>the original DOES land - a hard landing at 2.8 m/s</strong> " +
+      "(confirmed via a readable landing-message screenshot: 'keyNotFound2.8 m/s', hard " +
+      "landings: 1). Either way the scenario DIVERGES: the hand-built reference lands SOFT " +
+      "(~1.0-1.1 m/s) on the identical script. The aligned comparison also pinpoints WHERE: " +
+      "altitude tracks within ~0.6m through the entire free-fall phase (t=0-3700ms), and the " +
+      "first gap clearly above that noise (1.64m) appears at t=3800ms - exactly when thrust " +
+      "first engages, even though BOTH sides read the identical thrust value (9000N, then " +
+      "15750N by t=3900ms) at every matched sample, ruling out input handling/key-repeat as the " +
+      "cause. The gap then grows continuously through the rest of the burn, pointing at the " +
+      "physics integration itself behaving differently once a large, time-varying acceleration " +
+      "is involved (vs. free-fall's small constant case) - not fully distinguished (mass/thrust " +
+      "constant precision vs. a dt-measurement difference under Ruffle's AVM1 emulation are both " +
+      "live candidates) within this investigation's own time-box, and the rebuild was NOT " +
+      "modified to chase this down further. Note: the standard pipeline result above still uses " +
+      "the unaligned click path (not yet updated to match) and will keep reporting 'never lands' " +
+      "until it is - the DIVERGES verdict is correct either way, only the detailed mechanism " +
+      "shown here is the more precise one."
     );
   }
   return (
