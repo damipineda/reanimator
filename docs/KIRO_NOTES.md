@@ -766,6 +766,27 @@ reaches into `src/`, `scenarios/`, which would have reintroduced exactly
 the kind of two-copies-that-can-drift risk the `strings.json` fix above
 was about avoiding.
 
+### NOTICE.md: splitting MIT (ours) from CC BY 3.0 (PhET-derived), by exact file
+
+Added `NOTICE.md` at the repo root, listing every one of this repo's 76
+tracked files into exactly two groups: Reanimator's own code (49 files,
+MIT, covered by the existing `LICENSE` - not replaced or renamed) and
+files that are, in whole or part, a derivative work of PhET's Lunar
+Lander (27 files, CC BY 3.0 US, with the required attribution text and an
+explicit modification notice). The split landed cleanly on two whole
+directories - `src/rewrite/reference/` and
+`src/rewrite/fresh-session-2026-11-16/` - rather than needing a
+file-by-file judgment call, which made it possible to state the rule
+simply AND still enumerate every filename, satisfying both at once.
+Flagged `strings.json`'s mixed provenance explicitly (39 recovered / 5
+supplied, exact split already tracked per-entry inside the file itself -
+see "String provenance" above) since treating the whole file as uniformly
+one license or the other would have been wrong either way. Linked from
+both the README (a one-line license summary near the top) and the demo
+page's existing attribution block - verified the link actually resolves
+(`NOTICE.md` fetches 200 from the same static server the rest of the demo
+uses) rather than just writing the `href` and assuming it works.
+
 **Explicitly decided NOT to add any screenshot of the original `.swf` to
 the public demo**, even though it would make the "what did the original
 look like" story more complete visually. This project's own rule, set in

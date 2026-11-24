@@ -5,6 +5,11 @@ simulation into editable HTML5/JS, and measures (not just claims) how closely
 the rebuild matches the original. See `.kiro/steering/product.md` for the
 full mission and `.kiro/specs/reanimator-core/` for requirements/design.
 
+**License:** Reanimator's own code is MIT (`LICENSE`). The reconstructed
+game, recovered geometry, and recovered/supplied strings are a CC BY 3.0 US
+derivative of PhET's Lunar Lander, with required attribution - see
+**[`NOTICE.md`](./NOTICE.md)** for exactly which files that covers.
+
 **Current scope (reduced, Nov 2026 submission):** one sample, end to end.
 No SCORM export, no second sample, in this pass.
 
