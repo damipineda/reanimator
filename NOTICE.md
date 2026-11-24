@@ -14,7 +14,7 @@ its documentation, and its own prompts/specs/config) and is covered by
 the MIT License in `LICENSE` at the repo root. For completeness, that is
 every tracked file under:
 
-- `.github/`, `.kiro/`, `docs/`, `samples/`, `scenarios/`, `tests/`, `web/`
+- `.github/`, `.kiro/`, `bin/`, `docs/`, `samples/`, `scenarios/`, `tests/`, `web/`
 - `src/cache/`, `src/contracts/`, `src/extract/`, `src/llm/`,
   `src/prompts/`, `src/tasks/`, `src/verify/`
 - Root files: `.gitignore`, `.nojekyll`, `LICENSE`, `NOTICE.md`,
